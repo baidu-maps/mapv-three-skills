@@ -183,7 +183,7 @@ Engine 实例创建后，可通过以下属性访问内部子系统：
 | `getHeading()` | - | `number` | 获取当前旋转角度 |
 | `getPitch()` | - | `number` | 获取当前俯仰角 |
 | `getRange()` | - | `number` | 获取当前相机离地距离 |
-| `getBounds()` | - | `Box3` | 获取当前可视范围 |
+| `getGeoBoundingBox()` | - | `{ box: Box3 } \| null` | 获取当前视口的经纬度包围盒，`box.min = Vector3(minLng, minLat, 0)`，`box.max = Vector3(maxLng, maxLat, 0)` |
 | `getResolution()` | - | `Vector2` | 获取容器分辨率 |
 | `projectArrayCoordinate(input)` | `number[]` | `number[]` | 经纬度转投影坐标 |
 | `unprojectArrayCoordinate(input)` | `number[]` | `number[]` | 投影坐标转经纬度 |

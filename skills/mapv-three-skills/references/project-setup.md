@@ -9,7 +9,7 @@
 - `互联网环境 — 需手动拷贝 @baidu/mapv-three 包`
 
 两种环境的区别：
-- **百度内网**：能访问 `registry.npm.baidu-int.com`，直接 `npm install -S @baidu/mapv-three`
+- **百度内网**：能访问 `registry.npm.baidu-int.com`，直接 `npm install -S @baidu/mapv-three@latest`
 - **互联网**：无法访问百度内网 registry，需从内网获取 `@baidu/mapv-three` 的 tgz 包或目录，拷贝到项目中通过 `"file:./libs/@baidu/mapv-three"` 本地依赖安装
 
 两种环境安装完成后，包名和 API 完全一致，都是 `@baidu/mapv-three`。
@@ -69,11 +69,13 @@
 # 1. 配置内网 npm 源（项目根目录创建 .npmrc）
 echo "registry=http://registry.npm.baidu-int.com" > .npmrc
 
-# 2. 安装 mapv-three 和 three.js
-npm install -S @baidu/mapv-three
+# 2. 安装 mapv-three 最新版本（必须指定 @latest，否则可能安装到旧版本）
+npm install -S @baidu/mapv-three@latest
 # 如果 three.js 未自动安装（peerDependency >= 0.179.1）
 npm install -S three@0.179.1
 ```
+
+> **版本注意**：内网 npm 安装时**必须加 `@latest`**，否则可能因为 registry 缓存、package-lock.json 锁定等原因安装到旧版本。已有项目升级时，建议先删除 `node_modules` 和 `package-lock.json` 后重新安装。可通过 `npm list @baidu/mapv-three` 确认当前安装的版本号。
 
 ### 互联网环境
 

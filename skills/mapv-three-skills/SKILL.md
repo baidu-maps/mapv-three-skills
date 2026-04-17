@@ -33,6 +33,8 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 5. **百度底图**：用户提到"百度底图"、"百度地图"时，需同时查阅 `mapview-bindmap.md`（百度栅格影像 Baidu09ImageryTileProvider）和 `vector-tile.md`（百度矢量 BaiduVectorTileProvider），两者都是百度底图，让用户选择栅格还是矢量。
 6. **参数准确**：代码中的 API 名称、参数名、默认值必须与参考文档一致，不要凭记忆猜测。
 7. **AK 不要猜测**：使用 LBS 服务（地理编码、搜索、路线规划等）需要 `BaiduMapConfig.ak`。如果代码中已有 `BaiduMapConfig.ak` 的设置，可以直接复用；如果没有，必须提示用户提供，**不要**从其他服务（如 AssetsScene、TileLightManager 等）的 ak 中复用，因为不同服务的 ak 权限可能不同。
+8. **自定义瓦片排查**：用户反馈自定义 XYZ 瓦片加载不出来时，**不要直接修改代码**，而是查阅 `mapview-bindmap.md` 中 XYZImageryTileProvider 的「自定义瓦片服务常见问题排查」章节，将排查方案以清单形式列出引导用户确认。对于 startLevel 问题，如果用户不确定最小层级，可让用户提供一个可访问的瓦片地址，AI 通过 WebFetch 逐级访问父瓦片（z-1, x//2, y//2）自动探测出 startLevel。排查清单：(1) 瓦片地址是否可访问 (2) startLevel 是否匹配数据最小层级 (3) Y 坐标方向（{y} vs {reverseY}） (4) CORS 跨域。确认具体原因后再修改代码。
+9. **版本确认**：当用户遇到 API 不存在、参数不生效等问题时，优先让用户确认 `@baidu/mapv-three` 的版本（`npm list @baidu/mapv-three`）。内网 npm 安装时必须加 `@latest`（`npm install -S @baidu/mapv-three@latest`），否则可能因 registry 缓存或 lock 文件安装到旧版本。详见 `project-setup.md` 的版本注意事项。
 
 ## 快速参考
 
@@ -43,7 +45,7 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 - [引擎初始化与地图绑定](./references/engine-bindmap.md) — Engine构造函数、配置项、视野控制、生命周期
 
 ### 2. 天空与天气
-- [天空环境系统](./references/sky-environment.md) — EmptySky、DefaultSky、HazeSky、StaticSky、CustomStaticSky、VerticalGradientSky、DynamicSky
+- [天空环境系统](./references/sky-environment.md) — EmptySky、DefaultSky、HazeSky、StaticSky、CustomStaticSky、VerticalGradientSky、DynamicSky、PhysicalSky
 - [天气系统](./references/weather-system.md) — DynamicWeather 雨雪雾雷暴等9种天气效果
 
 ### 3. 底图加载
