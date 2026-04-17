@@ -32,6 +32,7 @@ sky.time = 3600 * 17.5;
 | `CustomStaticSky` | 自定义静态天空 | 低 | 使用自定义天空贴图 |
 | `VerticalGradientSky` | 垂直渐变天空 | 低 | 自定义垂直方向颜色渐变 |
 | `DynamicSky` | 动态天空（大气散射 + 体积云） | 高 | 高品质实时天空效果 |
+| `PhysicalSky` | 物理天空（真实大气散射 + 体积云 + 天文计算） | 最高 | **实验性**，最高品质真实天空，仅供测试 |
 
 ---
 
@@ -363,6 +364,76 @@ sky.time = 3600 * 17.5;
 
 ---
 
+## PhysicalSky - 物理天空
+
+> **注意：PhysicalSky 目前处于实验阶段，API 和渲染效果暂不稳定，不建议用于生产环境。仅在用户明确表示要测试或体验时才推荐使用，否则应推荐 DynamicSky。**
+
+最高品质天空效果，基于真实大气物理模型，使用天文算法（`getSunDirectionECEF`）根据系统实际时间自动计算太阳方向，提供真实的大气散射、体积云、镜头光晕（LensFlare）效果。支持平面地图和地球（Globe）模式。与 DynamicSky 的区别：PhysicalSky 使用系统真实时间驱动，不需要手动设置 `time`；渲染品质更高（使用 AgX 色调映射）；支持地球模式下的正确大气渲染。
+
+### 构造函数
+
+```javascript
+const sky = new mapvthree.PhysicalSky(options);
+engine.add(sky);
+```
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `options.sunLight` | `boolean` | `true` | 是否启用太阳平行光 |
+| `options.skyLight` | `boolean` | `true` | 是否启用天空环境光 |
+
+### 属性
+
+| 属性 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `affectWorld` | `boolean` | `true` | 天空是否影响场景环境反射 |
+| `enableAtmospherePass` | `boolean` | `true` | 是否启用大气后处理通道 |
+| `enableCloudsPass` | `boolean` | `true` | 是否启用体积云后处理通道 |
+| `enableCloudsShadow` | `boolean` | - | 是否启用云层投射阴影 |
+| `cloudsCoverage` | `number` | - | 云层覆盖率（0~1） |
+| `cloudsSpeed` | `number` | `1` | 云层移动速度 |
+| `cloudsBaseHeight` | `number` | - | 云层底部高度 |
+| `windDirection` | `Vector3` | `(1, 0, 0)` | 风向，影响云层移动方向 |
+
+### 预置天气属性
+
+PhysicalSky 内置天气预设，可被 `DynamicWeather` 读取：
+
+| 天气类型 | 太阳光强度 | 天光强度 | 云层覆盖 |
+|---------|-----------|---------|---------|
+| `clear` | 2.5 | 0.1 | 0.05 |
+| `partlyCloudy` | 2.2 | 0.2 | 0.25 |
+| `cloudy` | 0.5 | 0.5 | 0.4 |
+| `overcast` | 0 | 0.5 | 0.8 |
+| `foggy` | 0 | 0.5 | 0.8 |
+| `rainy` | 0 | 0.5 | 0.8 |
+| `snowy` | 0 | 0.5 | 0.8 |
+| `stormy` | 0 | 0.5 | 0.8 |
+
+### 示例
+
+```javascript
+import * as mapvthree from '@baidu/mapv-three';
+
+const engine = new mapvthree.Engine(document.getElementById('map_container'), {
+    rendering: {
+        sky: null,
+        enableAnimationLoop: true,
+    },
+});
+
+engine.map.lookAt([116, 39], { pitch: 80, range: 1000 });
+
+// 使用物理天空（自动跟随系统时间）
+const sky = engine.add(new mapvthree.PhysicalSky());
+
+// 调整云层
+sky.cloudsCoverage = 0.2;
+sky.cloudsSpeed = 1.5;
+```
+
+---
+
 ## 常见场景
 
 ### 场景一：高品质户外场景
@@ -434,3 +505,7 @@ sky.skyLightIntensity = 0.3;
    - `EmptySky` / `DefaultSky` / `HazeSky` 性能开销最低，适合移动端。
    - `StaticSky` / `CustomStaticSky` 加载纹理后性能开销低。
    - `DynamicSky` 包含大气散射和体积云，开销较高；可通过 `useVolumetricClouds = false` 关闭体积云。
+   - `PhysicalSky` 品质最高，基于真实天文计算和物理大气模型，开销最大。可通过 `enableCloudsPass = false` 关闭体积云降低开销。
+3. **DynamicSky vs PhysicalSky 选择**：
+   - `DynamicSky`：通过 `sky.time` 手动控制时间，参数更多（灰度因子、云形状缩放等），适合需要精细控制天空效果的场景
+   - `PhysicalSky`：自动跟随系统真实时间，渲染品质更高（AgX 色调映射），支持地球模式，适合追求最真实效果的场景

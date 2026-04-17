@@ -110,21 +110,30 @@ assetsScene.handleActiveDevice(modelInfo, type, options)
 |------|------|--------|------|
 | `text` | `string` | `''` | 显示文字，用 `\\` 分隔多行 |
 | `fontColor` | `string` | `'#0f0'` | 字体颜色 |
-| `fontSize` | `number` | `16` | 字体大小 |
+| `fontSize` | `number` | `16` | 字体大小（像素）。实际渲染时会按 Canvas 宽度与 screenLength 的比例缩放，且多行时会被行高覆盖（取行高和缩放后 fontSize 中较大的） |
 | `typeFace` | `string` | `'Songti SC'` | 字体 |
-| `layout` | `string` | `'center'` | 对齐方式 |
-| `overflow` | `string` | `'scroll'` | 溢出处理：`'scroll'` 滚动 |
+| `layout` | `string` | `'center'` | 对齐方式：`'left'` 左对齐、`'center'` 居中、`'right'` 右对齐。滚动模式下强制为 `'left'` |
+| `overflow` | `string` | `'scroll'` | 溢出处理：`'scroll'` 滚动、`'hidden'` 截断 |
 | `scrollSpeed` | `number` | `0.001` | 滚动速度 |
 | `scrollTime` | `number` | `2000` | 滚动间隔（ms） |
-| `screenLength` | `number` | - | 屏幕宽度（可选） |
-| `screenHeight` | `number` | - | 屏幕高度（可选） |
+| `screenLength` | `number` | - | 屏幕宽度（Canvas 像素尺寸）。值越大文字越清晰，但实际 Canvas 宽度会被向上取整到 2 的幂次（如 48→64, 200→256），高度按比例同步缩放，不影响显示效果 |
+| `screenHeight` | `number` | - | 屏幕高度（Canvas 像素尺寸）。与 screenLength 同步缩放 |
+| `rowSpacing` | `number` | `0.1` | 行间距比例系数，取值 0~1。见下方计算公式 |
 | `status` | `number` | - | 0=关闭（清空文字），其他=显示 |
 
 ### 注意事项
 
-- **必须传 `screenLength` 和 `screenHeight`**：这两个参数指定情报板画布的像素尺寸，不传会导致文字不显示或挤在一起。横向情报板推荐 `screenLength: 300, screenHeight: 48`（宽高比约 6:1）。
+- **必须传 `screenLength` 和 `screenHeight`**：这两个参数指定情报板画布的像素尺寸，不传会导致文字不显示或挤在一起。静态显示（`overflow: 'hidden'`）时，`screenLength:screenHeight` 的比例应与模型面板的物理宽高比一致，否则纹理会被截断；滚动模式（`overflow: 'scroll'`）下不受此限制，超出部分通过滚动展示。横向情报板推荐 `screenLength: 300, screenHeight: 48`（宽高比约 6:1）。
 - **换行符**：`\\` 是换行符，如需多行显示可在文字中插入 `\\`。但不要自动给用户的文字加换行，按用户原文传入即可。
 - **`emissiveIntensity`**：控制发光强度，推荐 `0.3`。
+- **`rowSpacing` 行间距计算**：行间距占 `screenHeight` 的比例，每两行之间间距为 `screenHeight × rowSpacing`。行高计算公式：
+  ```
+  每行高度 = (screenHeight - screenHeight × rowSpacing × (行数-1)) / 行数
+  ```
+  当用户想要调整行间距时，AI 应根据此公式计算合适的值：
+  - 用户说"紧密排列"或"无间距" → `rowSpacing: 0`
+  - 用户说"间距小一点" → 当前值减半（如 0.1 → 0.05）
+  - **注意上限**：`rowSpacing × (行数-1)` 不能超过 1，否则行高为负数导致文字无法显示。例如 12 行文字时 `rowSpacing` 最大不能超过 `1/11 ≈ 0.09`，默认的 0.1 已经会溢出
 
 ### 示例
 
@@ -167,7 +176,26 @@ assetsScene.handleActiveDevice('8406824597308799088', 'guidanceScreen', {
     text: '',
     status: 0,
 });
+
+// 竖排文字（每个字符之间用 \\ 换行，竖向比例，紧密排列）
+assetsScene.handleActiveDevice('8406824597308799088', 'guidanceScreen', {
+    text: '遇\\事\\故\\车\\靠\\边',
+    fontColor: '#0f0',
+    fontSize: 64,
+    typeFace: 'Songti SC',
+    layout: 'center',
+    screenLength: 256,    // 值大一些保证清晰
+    screenHeight: 768,    // 竖向比例
+    rowSpacing: 0,        // 消除行间距，文字紧密排列
+    emissiveIntensity: 0.3,
+});
 ```
+
+> **竖排文字说明**：情报板底层使用 Canvas `fillText` 渲染，不直接支持竖排模式。变通方案是在每个字符之间插入换行符 `\\`，并将 `screenLength` 和 `screenHeight` 比例调整为竖向（宽度小、高度大）。要点：
+> - **`rowSpacing`**：如果字间距太大，可以通过减小 `rowSpacing` 来调整（默认 0.1）。注意字数较多时默认值可能导致行间距总和超出画布高度，需要适当减小
+> - **`screenLength` 不要太小**：太小（如 48）会导致 Canvas 分辨率低、文字模糊，推荐 128 以上
+> - **`fontSize` 适当加大**：配合更大的 screenLength/screenHeight，保持文字清晰
+> - 此方案适用于单列竖排文字，多列竖排暂不支持
 
 ---
 

@@ -92,7 +92,7 @@ const mapView = engine.add(new mapvthree.MapView({
 用户选择在线后，检查项目中是否已配置 `BaiduMapConfig.ak`，如果没有则提醒用户添加实际 AK。
 用户选择离线后，让用户提供离线服务器地址（url）和静态资源地址（staticUrl）。
 
-> **注意**：在线模式下必须先配置 `BaiduMapConfig.ak`。离线模式（`isOffline: true`）不需要 AK。BaiduLaneVectorTileProvider 不需要 AK。
+> **注意**：在线模式下必须先配置 `BaiduMapConfig.ak`。离线模式（`isOffline: true`）不需要 AK。BaiduLaneVectorTileProvider 不需要 AK，但**必须提供 `url` 参数**（瓦片服务地址），没有内置默认地址。如果用户没有提供 url，必须询问用户的瓦片服务地址。
 
 ```javascript
 // 在线模式 - 必须先设置百度地图 AK
@@ -138,7 +138,7 @@ const mapView = engine.add(new mapvthree.MapView({
 
 ### BaiduLaneVectorTileProvider
 
-百度车道级矢量瓦片提供者，加载百度地图的车道级矢量瓦片数据（PBF 格式），渲染精细道路结构。支持室内建筑多楼层渲染、POI 标签、AOI 区域标注和自定义样式，无需 AK。
+百度车道级矢量瓦片提供者，加载百度地图的车道级矢量瓦片数据（PBF 格式），渲染精细道路结构。支持室内建筑多楼层渲染、POI 标签、AOI 区域标注和自定义样式。无需 AK，但 **必须配置 `url`**（瓦片服务地址），否则无法加载任何数据。
 
 ```javascript
 const mapView = engine.add(new mapvthree.MapView({
@@ -159,7 +159,7 @@ const mapView = engine.add(new mapvthree.MapView({
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `url` | `string` | - | 瓦片服务地址，支持 `{z}`、`{x}`、`{y}`、`{reverseY}` 占位符 |
+| `url` | `string` | **必填** | 瓦片服务地址，支持 `{z}`、`{x}`、`{y}`、`{reverseY}` 占位符。没有内置默认地址，不配置则无法加载 |
 | `styleUrl` | `string` | 内置路径 | 样式配置 JSON 文件 URL |
 | `indoorStyleUrl` | `string` | 内置路径 | 室内样式配置 JSON 文件 URL |
 | `resourceBaseUrl` | `string` | - | 静态资源（图标、样式等）基础 URL |
