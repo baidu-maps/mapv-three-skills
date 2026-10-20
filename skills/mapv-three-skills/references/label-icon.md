@@ -3,7 +3,7 @@
 ## 如何选择
 
 - **大部分场景使用 `Label`**：支持文本、图标、图文组合，功能最全面，是首选组件。Label 可以覆盖 Text 的所有功能。
-- **纯图标展示使用 `Icon`**：支持贴地、跳动动画、旋转等特性，适合不需要文字的纯图标场景。
+- **纯图标展示使用 `Icon`**：支持平面朝向、三维表面贴合、跳动动画和旋转，适合不需要文字的纯图标场景。
 - **海量图标且追求性能使用 `IconPoint`**：基于 GL_POINTS 渲染，性能开销最低，只面向屏幕显示，适合需要渲染大量简单图标且对性能敏感的场景。
 - **纯文字标注可使用 `Text`**：基于 Canvas 绘制文字纹理，支持自定义字体、描边。但 Label 已覆盖 Text 的所有功能且使用 SDF 渲染效果更好，推荐优先使用 Label。
 
@@ -21,7 +21,9 @@
 |------|------|--------|------|
 | `type` | `string` | `'icon'` | 绘制类型，支持 `'icon'`、`'text'`、`'icontext'` |
 | `vertexIcons` | `boolean` | `false` | 数据中是否携带图标 URL 资源 |
-| `flat` | `boolean` | `false` | 是否贴地显示 |
+| `flat` | `boolean` | `false` | 是否采用平面朝向；不控制地形或 3DTiles 表面贴合 |
+| `clampToGround` | `boolean` | `false` | 是否把锚点贴到地形或 3DTiles 表面，并保留组件自身朝向 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 | `enableFade` | `boolean` | `false` | 是否启用淡入淡出效果（数据需指定 `id`） |
 | `fadeDuration` | `number` | - | 淡入淡出持续时间 |
 | `mapSrc` | `string` | - | 统一的图标 URL（当 `vertexIcons` 为 `false` 时使用） |
@@ -100,7 +102,9 @@
 - `depthTest` - 深度测试
 - `depthWrite` - 深度写入
 - `opacity` - 透明度
-- `flat` - 贴地模式
+- `flat` - 平面朝向
+- `clampToGround` - 三维表面贴合开关
+- `groundTargets` - 指定贴合目标
 - `keepSize` - 保持像素大小
 - `vertexColors` - 顶点颜色
 - `positionOffset` - 坐标偏移
@@ -256,6 +260,8 @@ label.addEventListener('mouseleave', e => {
 | `transparent` | `boolean` | - | 是否透明 |
 | `opacity` | `number` | `1` | 透明度整体系数 |
 | `boxSize` | `number` | `100` | 雪碧图最大图标数量 |
+| `clampToGround` | `boolean` | `false` | 是否把图标锚点贴到地形或 3DTiles 表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 
 ### 单图标模式
 
@@ -327,6 +333,7 @@ iconPoint.dataSource = data;
 - `opacity` - 透明度
 - `vertexColors` / `vertexSizes` / `vertexIcons` / `vertexOffsets` - 顶点数据开关
 - `mapSrc` / `mapTexture` - 图标纹理
+- `clampToGround` / `groundTargets` - 三维表面贴合及接收目标
 
 ---
 
@@ -349,7 +356,9 @@ iconPoint.dataSource = data;
 | `transparent` | `boolean` | `true` | 是否启用透明 |
 | `opacity` | `number` | `1` | 整体透明度 |
 | `keepSize` | `boolean` | `true` | 是否保持像素大小（不随地图缩放变化） |
-| `flat` | `boolean` | `false` | 是否贴地显示 |
+| `flat` | `boolean` | `false` | 是否采用平面朝向；不控制三维表面贴合 |
+| `clampToGround` | `boolean` | `false` | 是否把图标锚点贴到地形或 3DTiles 表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 | `color` | `string` | - | 图标颜色叠加 |
 | `rotateZ` | `number` | `0` | 旋转弧度（0~2Pi），仅 `flat: true` 时生效 |
 | `vertexRotateZs` | `boolean` | `false` | 是否通过数据携带旋转角度 |
@@ -457,7 +466,9 @@ icon.addEventListener('click', e => {
 - `mapSrc` - 图标 URL
 - `transparent` - 透明开关
 - `opacity` - 透明度
-- `flat` - 贴地模式
+- `flat` - 平面朝向
+- `clampToGround` - 三维表面贴合开关
+- `groundTargets` - 指定贴合目标
 - `keepSize` - 保持像素大小
 - `color` - 颜色
 - `vertexColors` - 顶点颜色
@@ -490,7 +501,9 @@ const text = engine.add(new mapvthree.Text(parameters));
 | `padding` | `number[]` | `[2, 2]` | 文字内边距 `[x, y]` |
 | `keepSize` | `boolean` | `false` | 是否保持像素大小（不随地图缩放变化） |
 | `opacity` | `number` | `1` | 整体透明度 |
-| `flat` | `boolean` | `false` | 是否贴地显示 |
+| `flat` | `boolean` | `false` | 是否采用平面朝向；不控制三维表面贴合 |
+| `clampToGround` | `boolean` | `false` | 是否把文字锚点贴到地形或 3DTiles 表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 
 ### 属性
 
@@ -506,7 +519,9 @@ const text = engine.add(new mapvthree.Text(parameters));
 | `padding` | `number[]` | 文字内边距 |
 | `keepSize` | `boolean` | 保持像素大小 |
 | `opacity` | `number` | 透明度 |
-| `flat` | `boolean` | 贴地显示 |
+| `flat` | `boolean` | 平面朝向 |
+| `clampToGround` | `boolean` | 三维表面贴合开关 |
+| `groundTargets` | `Object3D[]` | 指定贴合目标 |
 | `dataSource` | `DataSource` | 数据源 |
 
 ### 使用示例
@@ -542,12 +557,29 @@ text.dataSource = data;
 | 文字支持 | 支持（SDF 渲染） | 不支持 | 不支持 | 支持（Canvas 渲染） |
 | 图标支持 | 支持 | 支持 | 支持 | 不支持 |
 | 图文组合 | 支持 | 不支持 | 不支持 | 不支持 |
-| 贴地模式 | 支持 | 不支持 | 支持 | 支持 |
+| 三维表面贴合 | 支持 | 支持 | 支持 | 支持 |
 | 跳动动画 | 不支持 | 不支持 | 支持 | 不支持 |
 | 碰撞检测 | 支持 | 支持 | 支持 | 支持 |
 | 射线拾取 | 支持 | 不支持 | 支持（精确） | 支持 |
 | 地球模式 | 支持 | 不支持 | 支持 | 支持 |
-| 适用场景 | 大批量文本/图标标注 | 大量简单图标标记 | 需要动画/贴地的图标 | 简单纯文字标注（建议用 Label 替代） |
+| 适用场景 | 大批量文本／图标标注 | 大量简单图标标记 | 需要动画或平面朝向的图标 | 简单纯文字标注（建议用 Label 替代） |
+
+## 三维表面贴合
+
+`Label`、`IconPoint`、`Icon` 和 `Text` 都可以把地理锚点贴到地形或 3DTiles 表面：
+
+```javascript
+const label = engine.add(new mapvthree.Label({
+    type: 'text',
+    clampToGround: true,
+    groundTargets: [terrain, hdmap],
+}));
+label.dataSource = labelSource;
+```
+
+`flat` 控制组件的平面朝向或渲染方式，`clampToGround` 才控制三维表面采样。贴合只移动锚点，不会把面向屏幕的 Label 强制旋转到表面法线方向。省略 `groundTargets` 时自动发现可接收表面；传空数组表示不接收任何表面；没有命中时保留原始位置。
+
+修改 `clampToGround` 或 `groundTargets` 会让对象重新采样，并同步刷新碰撞布局。大量点的采样有逐帧预算，刚绑定数据时可能分多帧完成。
 
 ## 碰撞检测
 
@@ -582,3 +614,8 @@ data.defineAttribute('color').defineAttribute('size').defineAttribute('icon');
 // 绑定到组件
 component.dataSource = data;
 ```
+## 无人机标签与实时目标标签
+
+常驻机队标注使用 [UAVFleet.dataSource](./uav.md#共享数据和限时标签)，Label、SimplePoint、EffectPoint 可借用同一源；示例和释放顺序统一在该文档维护。无需业务每帧复制飞机位置，也无需另造 DynamicIcon。
+
+需要“告警显示 5 秒后淡出”，使用 fleet.showLabels／setLabelOptions，拥有独立 labelDataSource；到期不删除飞机或常驻标签。需要实时无人机远处显示 ID、近处显示模型，使用 [Twin.lod.farObjects](./twin.md#远近景展示和模型预算) 的 Label 模板和 objectAttributes，不要手工维护每个目标一个 DOM。

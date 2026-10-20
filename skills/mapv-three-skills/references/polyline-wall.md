@@ -1,6 +1,6 @@
 # Polyline 折线与 Wall 墙体
 
-mapv-three 提供了三种线型组件和一种墙体组件，用于在 3D 地图上绘制各类线状要素。本文档从源码中提取全部参数，涵盖 SimpleLine、Polyline（含 flat 贴地模式）和 Wall 的完整 API 参考。
+mapv-three 提供了三种线型组件和一种墙体组件，用于在 3D 地图上绘制各类线状要素。本文档涵盖 SimpleLine、Polyline 和 Wall，并说明平面拉伸、三维表面贴合与航线效果的区别。
 
 ---
 
@@ -9,7 +9,7 @@ mapv-three 提供了三种线型组件和一种墙体组件，用于在 3D 地�
 | 组件 | 类名 | 说明 |
 |------|------|------|
 | 简单线 | `mapvthree.SimpleLine` | 1px 基础线条，性能最优，功能最少 |
-| 折线 | `mapvthree.Polyline` | 有宽度的线，支持虚线、动画、纹理，通过 `flat` 参数切换屏幕空间线/贴地线 |
+| 折线 | `mapvthree.Polyline` | 有宽度的线，支持虚线、动画、纹理，并可独立启用三维表面贴合 |
 | 墙体 | `mapvthree.Wall` | 沿线路径生成无厚度的垂直墙面，支持高度渐变、动画、纹理 |
 
 ---
@@ -90,7 +90,9 @@ line.dataSource = dataSource;
 功能最丰富的线组件。通过 `flat` 参数区分两种渲染模式：
 
 - **`flat: false`（默认）** — 屏幕空间拉伸线（PolylineInternal），线宽以屏幕像素为单位，适用于普通折线
-- **`flat: true`** — XY 平面拉伸线（FatLineInternal），线宽以地理坐标为单位，支持贴地渲染、动画、纹理贴图等高级特性
+- **`flat: true`** -- XY 平面拉伸线（FatLineInternal），支持动画、纹理和米制宽度等高级特性
+
+`flat` 选择线的拉伸方式，不表示是否采样地形或 3DTiles。三维表面贴合由 `clampToGround` 控制。
 
 ### 构造函数
 
@@ -104,7 +106,9 @@ const polyline = engine.add(new mapvthree.Polyline(parameters));
 
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `flat` | `boolean` | `false` | 渲染模式开关。`false`=屏幕空间线，`true`=贴地线（XY 平面拉伸） |
+| `flat` | `boolean` | `false` | 渲染模式开关。`false` 为屏幕空间拉伸，`true` 为 XY 平面拉伸 |
+| `clampToGround` | `boolean` | `false` | 是否贴合地形或 3DTiles 表面，与 `flat` 独立 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 | `color` | `string` | `'#00ffff'` | 线条颜色，支持十六进制或 CSS 颜色值 |
 | `lineWidth` | `number` | `4` | 线条宽度 |
 | `height` | `number` | - | 线条高度偏移，用于 3D 效果 |
@@ -168,6 +172,8 @@ const polyline = engine.add(new mapvthree.Polyline(parameters));
 | `keepSize` | `boolean` | 保持像素宽度（flat 模式） |
 | `enableAnimation` | `boolean` | 动画开关（flat 模式） |
 | `animationSpeed` | `number` | 动画速度（flat 模式） |
+| `clampToGround` | `boolean` | 是否启用三维表面贴合；修改后重建底层线对象 |
+| `groundTargets` | `Object3D[]` | 指定贴合目标；修改后重新采样 |
 | `dataSource` | `DataSource` | 数据源 |
 
 ### 示例：屏幕空间折线
@@ -185,7 +191,7 @@ const dataSource = mapvthree.GeoJSONDataSource.fromGeoJSON(geojsonData);
 polyline.dataSource = dataSource;
 ```
 
-### 示例：贴地粗线
+### 示例：平面拉伸粗线
 
 ```javascript
 const fatLine = engine.add(new mapvthree.Polyline({
@@ -200,7 +206,22 @@ const dataSource = await mapvthree.GeoJSONDataSource.fromURL('data/geojson/line.
 fatLine.dataSource = dataSource;
 ```
 
-### 示例：贴地粗线 + 顶点颜色
+### 示例：贴合地形或 3DTiles 表面
+
+```javascript
+const surfaceLine = engine.add(new mapvthree.Polyline({
+    flat: true,
+    clampToGround: true,
+    groundTargets: [terrain, hdmap],
+    color: '#40ddcb',
+    lineWidth: 6,
+}));
+surfaceLine.dataSource = dataSource;
+```
+
+省略 `groundTargets` 时，引擎自动发现可接收表面；传入空数组表示不接收任何表面。未命中接收表面时保留数据源原始位置。贴合需要采样和细分线段，大量长线应控制数据规模。
+
+### 示例：平面拉伸粗线 + 顶点颜色
 
 ```javascript
 const line = engine.add(new mapvthree.Polyline({
@@ -480,3 +501,68 @@ const line = engine.add(new mapvthree.Polyline({
 7. **SimpleLine 不支持宽度设置** — SimpleLine 的线宽固定为 1px（受 WebGL 限制），如需可变宽度请使用 Polyline。
 
 8. **数据源格式** — 所有组件接受 `LineString` 类型的 GeoJSON 数据。Wall 同样使用 `LineString`，沿路径向上拉伸生成墙面。
+## 低空航线补充：Polyline 与 TubeLine
+
+飞机关联航线优先用 [UAVFleet.route](./uav.md)，机队自动同步改线、返程箭头和删除。只有独立航线、空间走廊或自主管理的图层才直接初始化下面组件；它们不驱动飞机运动。
+
+### 独立箭头与渐变航线
+
+```javascript
+const routeSource = mapvthree.GeoJSONDataSource.fromGeoJSON({
+    type: 'FeatureCollection', features: [{type: 'Feature', properties: {id: 'route-001'},
+        geometry: {type: 'LineString', coordinates: [
+            [113.3552, 23.1252, 80], [113.357, 23.1252, 100], [113.358, 23.126, 120],
+        ]}}],
+});
+const routeLine = engine.add(new mapvthree.Polyline({
+    flat: false, clampToGround: false, keepSize: true, color: '#40ddcb', lineWidth: 10,
+    arrow: {color: '#102b3b', length: 12, spacing: 35, speed: 15},
+}));
+routeLine.dataSource = routeSource;
+routeLine.dashed = true;
+routeLine.dashArray = 20;
+routeLine.dashRatio = 0.5;
+routeLine.gradient = {0: '#40ddcb', 1: '#ff664f'};
+routeLine.arrow = {...routeLine.arrow, reverse: true};
+```
+
+arrow 默认 null；启用对象时默认 color:'#ffffff'、length:12、spacing:40、speed:0、reverse:false。要求 spacing >= length > 0、speed >= 0。默认不流动，正 speed 才流动；底线颜色与箭头应有对比。沿线路程参数用地理线的米／米每秒，不是风场箭头的 CSS 像素尺寸。
+
+gradient 默认 null；键为 [0,1] 沿线进度，至少两个不同位置。arrow／gradient 都按整个字段赋值，设 null 关闭。独立线不自动订阅任意 UAV 的返程事件；托管线才会随飞机往返反向。
+
+修改独立路径需更新数据源；释放时先解绑组件再释放自有源：
+
+```javascript
+routeLine.dataSource = null;
+engine.remove(routeLine);
+routeSource.dispose();
+```
+
+### TubeLine：有半径的三维航路管道
+
+```javascript
+const tube = engine.add(new mapvthree.TubeLine({
+    path: [[113.3552, 23.1252, 80], [113.357, 23.1252, 100], [113.358, 23.126, 120]],
+    radius: 8, radialSegments: 8, curve: 'centripetal',
+    segmentColors: ['#40ddcb', '#ffb35d'], opacity: 0.25,
+}));
+await tube.ready;
+tube.setSegmentColor(1, '#ff664f');
+tube.setStyle({opacity: 0.4});
+await tube.setPath([[113.3552, 23.1252, 80], [113.359, 23.126, 120]], {curve: 'linear'});
+```
+
+| 参数 | 类型 | 默认值 | 含义 |
+| --- | --- | --- | --- |
+| path | number[][] | 必填 | WGS84 经纬高，至少两个不同点，最多 2048 个，纬度 ±85°，每段不超过 100 km；centripetal 要求所有航点在首点 100 km 内 |
+| radius | number | 5 | 正米制半径，表示空间走廊宽度 |
+| radialSegments | number | 8 | 截面分段数，整数 3～64 |
+| curve | string | `'linear'` | 可用 centripetal 平滑 |
+| color／opacity | 颜色／number | '#3edbd0'／0.25 | 默认管道外观；颜色只接受 THREE.Color、十六进制整数、`#rgb`／`#rrggbb`、CSS 颜色名，不支持 rgb()／rgba()／#rrggbbaa |
+| segmentColors | 颜色数组 | 无，沿用 color | 数量等于有效原始航段数 |
+
+setSegmentColor 的段号从 0 开始，1 表示第二段；平滑曲线仍按原始航段对应着色。setStyle 仅支持 color 和 opacity，`setStyle({color})` 会覆盖全部分段色。setPath 接受 curve、segmentColors、signal，未传 curve 使用 linear，未传 segmentColors 回退为全局色；并发调用时先发起的一次以 SUPERSEDED 拒绝。getPath 返回的是内部采样点（约每 100 米一个，平滑曲线更密），不是原始航点，不要拿它配 segmentColors 再传回 setPath。只读 `radius` 可查询半径；修改半径／截面精度需重建独立实例，或更新 Fleet 托管 route 配置。
+
+TubeLine 必须先 `engine.add` 才能 setPath（否则抛 INVALID_STATE）；地图 coordType 显式设为非 WGS84 时 add 抛 UNSUPPORTED_MAP。平面地图下不支持跨日界线；三角形顶点预算 50 万，超出报 BUDGET_EXCEEDED。异步失败通过 `error` 事件通知。
+
+这是引擎入口导出的地理 TubeLine，勿混用 addons 中接受局部世界坐标的同名类。管道表示航路空间，不自动做碰撞、航路规划或风险分析。复杂度随航点、曲线采样和截面分段增长，改色不用每帧重建路径。临时 remove 可再 add，永久释放调用 tube.dispose。

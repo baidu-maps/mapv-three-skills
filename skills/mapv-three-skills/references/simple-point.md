@@ -59,6 +59,8 @@ new mapvthree.SimplePoint(parameters)
 | `mapSrc` | `string` | `null` | 自定义纹理贴图的 URL。设置后点将使用该贴图渲染，替代默认的几何形状 |
 | `offset` | `Array<number>` | `[0, 0]` | 点的屏幕偏移量 `[x, y]`，单位为像素 |
 | `emissive` | `Array<number>` | `[0, 0, 0]` | 自发光颜色 `[r, g, b]`，取值范围 0~1 |
+| `clampToGround` | `boolean` | `false` | 是否把点锚点贴到地形或 3DTiles 表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 
 ## 属性列表
 
@@ -79,6 +81,8 @@ new mapvthree.SimplePoint(parameters)
 | `visible` | `boolean` | 是否可见（继承自 THREE.Object3D） |
 | `needsUpdate` | `boolean` | 设为 `true` 可强制在下一帧更新渲染数据 |
 | `parameters` | `Object` | 只读，返回当前构造参数 |
+| `clampToGround` | `boolean` | 是否启用三维表面贴合 |
+| `groundTargets` | `Object3D[]` | 指定贴合目标；修改后重新采样 |
 
 ## 方法列表
 
@@ -90,6 +94,19 @@ new mapvthree.SimplePoint(parameters)
 | `clearAttributeRename()` | 清空所有属性重命名映射 |
 
 ## 常见场景
+
+### 贴到地形或 3DTiles
+
+```javascript
+const point = engine.add(new mapvthree.SimplePoint({
+    size: 20,
+    clampToGround: true,
+    groundTargets: [terrain, hdmap],
+}));
+point.dataSource = dataSource;
+```
+
+省略 `groundTargets` 时由引擎自动发现可接收表面；传入 `[]` 会关闭接收目标，即使 `clampToGround` 为 `true` 也不会贴到对象上。未命中接收表面时保留数据源原始位置。
 
 ### 基础散点图
 

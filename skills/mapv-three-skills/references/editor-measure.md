@@ -42,7 +42,7 @@ editor.addEventListener('created', () => {
 
 ### 1.2 构造函数
 
-```javascript
+```text
 new mapvthree.Editor(options?)
 ```
 
@@ -53,6 +53,8 @@ new mapvthree.Editor(options?)
 | `singleMode` | `boolean` | `false` | 单要素模式，绘制新要素时自动清除旧要素 |
 | `enableMidpointHandles` | `boolean` | `false` | 编辑时是否显示中点控制点（用于在边上添加顶点） |
 | `continuousDrawing` | `boolean` | `false` | 是否启用连续绘制模式 |
+| `clampToGround` | `boolean` | `false` | 绘制结果、预览和控制点是否贴合地形或 3DTiles 表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定接收表面根节点；空数组表示不接收任何表面 |
 | `renderOptions.depthTest` | `boolean` | `true` | 是否启用深度测试 |
 | `renderOptions.transparent` | `boolean` | `true` | 是否启用透明度 |
 | `renderOptions.renderOrder` | `number` | `0` | 渲染顺序 |
@@ -83,6 +85,8 @@ new mapvthree.Editor(options?)
 | `isDrawing` | `boolean` | 只读 | 当前是否正在绘制 |
 | `isEditing` | `boolean` | 只读 | 当前是否正在编辑 |
 | `renderOptions` | `Object` | 只读 | 渲染选项配置 |
+| `clampToGround` | `boolean` | 读写 | 是否启用三维表面贴合，切换后同步更新已有结果和控制点 |
+| `groundTargets` | `Object3D[]` | 读写 | 指定贴合目标，修改后重新计算已有结果 |
 
 ### 1.5 方法
 
@@ -315,7 +319,7 @@ editor.addEventListener('delete', () => {
 ### 1.7 样式配置项
 
 ```javascript
-{
+const style = {
     fillColor: '#3388ff',       // 填充颜色（多边形、圆、矩形）
     fillOpacity: 0.2,           // 填充透明度
     strokeColor: '#3388ff',     // 边框/线条颜色
@@ -323,7 +327,7 @@ editor.addEventListener('delete', () => {
     strokeOpacity: 1,           // 边框/线条透明度
     pointRadius: 5,             // 点半径（仅 point 类型）
     radius: 100,                // 圆半径（仅 circle 类型，单位：米）
-}
+};
 ```
 
 ### 1.8 Feature 数据结构
@@ -344,7 +348,7 @@ editor.addEventListener('delete', () => {
 
 ```javascript
 // 添加到引擎
-const editor = engine.add(new mapvthree.Editor({ ... }));
+const editor = engine.add(new mapvthree.Editor());
 
 // 从引擎移除（自动调用 dispose 清理资源）
 engine.remove(editor);
@@ -382,7 +386,7 @@ measure.addEventListener('created', () => {
 
 ### 2.2 构造函数
 
-```javascript
+```text
 new mapvthree.Measure(options?)
 ```
 
@@ -391,11 +395,30 @@ new mapvthree.Measure(options?)
 | `type` | `MeasureType` | `'distance'` | 测量类型 |
 | `continuousDrawing` | `boolean` | `false` | 是否连续测量 |
 | `enableMidpointHandles` | `boolean` | `true` | 是否启用中点标记 |
-| `renderOptions.depthTest` | `boolean` | `false` | 深度测试（默认关闭） |
+| `clampToGround` | `boolean` | `false` | 预览、结果和标签锚点是否贴合三维表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定地形或 3DTiles 接收目标；空数组表示不接收 |
+| `measurementMode` | `'horizontal'\|'space'` | 见下文 | 距离计算方式，可在创建后动态修改 |
+| `renderOptions.depthTest` | `boolean` | 跟随贴合模式 | 未显式传入时，贴合为 `true`，普通测量为 `false` |
 | `renderOptions.transparent` | `boolean` | `true` | 透明度 |
 | `renderOptions.renderOrder` | `number` | `100` | 渲染顺序 |
 
 > 注意：`Measure` 自动设置 `showLabel: true` 和 `singleMode: true`。
+
+`measurementMode: 'horizontal'` 忽略航点高差，计算平面水平距离；`'space'` 计算相邻端点之间的三维直线距离，不沿起伏表面做积分。构造时未指定该参数，贴合测量默认使用 `horizontal`，普通测量默认使用 `space`。之后修改 `clampToGround` 不会自动改变已经选择的计算模式。
+
+```javascript
+const measure = engine.add(new mapvthree.Measure({
+    type: mapvthree.MeasureType.DISTANCE,
+    clampToGround: true,
+    groundTargets: [terrain, hdmap],
+    measurementMode: 'horizontal',
+}));
+
+// 保持贴合显示，切换为端点间三维距离。
+measure.measurementMode = 'space';
+```
+
+贴合控制“画在哪里”，`measurementMode` 控制“数值怎么算”，两者相互独立。
 
 ### 2.3 MeasureType 测量类型常量
 
@@ -521,7 +544,7 @@ measure.setPointFormatter((point) => {
 #### 距离测量
 
 ```javascript
-{
+const distanceResult = {
     featureId: 'string',
     type: 'distance',
     result: {
@@ -531,15 +554,15 @@ measure.setPointFormatter((point) => {
             { distance: 500.12, formattedDistance: '500.1 m' },
             { distance: 734.44, formattedDistance: '734.4 m' },
         ],
-        coordinates: [[lng1, lat1], [lng2, lat2], ...]
+        coordinates: [[116.404, 39.915], [116.414, 39.925]],
     }
-}
+};
 ```
 
 #### 面积测量
 
 ```javascript
-{
+const areaResult = {
     featureId: 'string',
     type: 'area',
     result: {
@@ -547,15 +570,20 @@ measure.setPointFormatter((point) => {
         formattedArea: '5.00 公顷',
         perimeter: 1000.0,                      // 周长（米）
         formattedPerimeter: '1.00 km',
-        coordinates: [[lng1, lat1], [lng2, lat2], ...]
+        coordinates: [
+            [116.404, 39.915],
+            [116.414, 39.915],
+            [116.414, 39.925],
+            [116.404, 39.915],
+        ],
     }
-}
+};
 ```
 
 #### 坐标测量
 
 ```javascript
-{
+const pointResult = {
     featureId: 'string',
     type: 'point',
     result: {
@@ -565,7 +593,7 @@ measure.setPointFormatter((point) => {
         formattedPoint: '116.516303, 39.799170',
         coordinates: [116.516303, 39.799170]
     }
-}
+};
 ```
 
 ### 2.6 静态计算方法
@@ -827,4 +855,3 @@ editor.enableEdit();
 const result = editor.exportData();
 console.log(JSON.stringify(result, null, 2));
 ```
-

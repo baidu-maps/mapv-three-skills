@@ -2,6 +2,12 @@
 
 MapV-Three 提供了三种动画追踪器，用于实现路径巡游、环绕浏览和对象跟随等相机动画效果。
 
+低空场景中，独立相机巡游继续使用本文 PathTracker；已有对象沿路运动也可沿用其 object 功能。需要单机启停、掉头、机载视域、机队及航线关联时使用 [UAV／UAVFleet](./uav.md)，实时推送位置使用 [Twin](./twin.md)。不要为了低空相机巡航生成 engine.navigateByKeypoints 等已收敛掉的入口，或另建一套重复的相机模式。
+
+PathTracker 的路径是被跟随目标的位置，相机位置还受 range、pitch、heading 等控制；不能只凭航点高度就断言相机本身经过该高度。保留既有参数与语义，不把 UAV 的米／秒 speed、follow 配置直接传给 tracker.start。
+
+需要相机本身沿航线飞（相机巡航）时，在球面地图或 BlankMap3D 下显式传 `start({range: 0})`，相机直接位于路径采样点。BlankMap3D 下非零 range 按米生效；2.0.97-beta8 之前的版本在 BlankMap3D 下会忽略非零 range，一直沿用旧距离。
+
 ## 快速开始
 
 ```javascript

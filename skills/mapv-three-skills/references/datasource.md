@@ -356,3 +356,8 @@ setTimeout(() => {
 4. **CSV 坐标格式**：CSVDataSource 默认使用 `coordinates` 列的 WKT 格式（如 `POINT(116.404 39.915)`）。可通过 `coordinatesKey` 自定义字段名，或通过 `parseCoordinates` 自定义解析逻辑。
 
 5. **ID 管理**：DataItem 的 `id` 只能设置一次。如果不手动设置，数据源会在添加时自动生成 `_gid_N` 格式的 ID。交互操作（如点击修改、删除）依赖 ID 来定位数据项。
+## 低空组件共享数据源
+
+[UAVFleet](./uav.md#共享数据和限时标签) 提供稳定的 dataSource，自动维护成员位置、业务属性和飞行状态；Label、SimplePoint、EffectPoint 只需绑定该源。临时告警用独立 labelDataSource。数据源是当前目标点集合，不是 getPath 返回的航点序列，也不是独立 Polyline 的路线源。
+
+共享源由 Fleet 拥有：业务可 defineAttributes 做显示映射，不要直接增删、clear 或 dispose；销毁外部展示组件前先解除 dataSource 绑定，最后释放 Fleet。原始遥测通过 [Twin.dataProvider](./twin.md#实时无人机接入) 映射并 push，Twin 的远景组件数据由内部维护，不需再建立同样的共享源。

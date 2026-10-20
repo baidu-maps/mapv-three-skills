@@ -24,7 +24,7 @@ polygon.dataSource = dataSource;
 
 ## 构造函数
 
-```javascript
+```text
 new mapvthree.Polygon(parameters?)
 ```
 
@@ -48,6 +48,8 @@ new mapvthree.Polygon(parameters?)
 | `borderColor` | `string` | `'#000000'` | 边框颜色 |
 | `borderWidth` | `number` | `2` | 边框线宽（像素） |
 | `borderOpacity` | `number` | `1` | 边框透明度 |
+| `clampToGround` | `boolean` | `false` | 是否把面及其边框贴到地形或 3DTiles 表面 |
+| `groundTargets` | `Object3D[]` | 自动发现 | 指定可接收贴合的对象根节点；空数组表示不接收任何表面 |
 
 ---
 
@@ -65,6 +67,8 @@ new mapvthree.Polygon(parameters?)
 | `enableBottomFace` | `boolean` | 是否封闭底面 |
 | `zOffset` | `number` | 整体高度抬升 |
 | `perPositionHeight` | `boolean` | 是否使用顶点高度 |
+| `clampToGround` | `boolean` | 是否启用三维表面贴合 |
+| `groundTargets` | `Object3D[]` | 指定贴合目标；修改后重新构建表面几何 |
 
 ### 材质属性
 
@@ -110,6 +114,21 @@ new mapvthree.Polygon(parameters?)
 ---
 
 ## 常见场景
+
+### 贴到地形和 3DTiles 表面
+
+```javascript
+const area = engine.add(new mapvthree.Polygon({
+    color: '#40ddcb',
+    opacity: 0.35,
+    border: true,
+    clampToGround: true,
+    groundTargets: [terrain, hdmap],
+}));
+area.dataSource = polygonSource;
+```
+
+`clampToGround` 控制三维表面贴合。省略 `groundTargets` 时自动发现接收对象；传空数组表示不接收任何表面。贴合会根据目标表面细分几何，复杂面和大量接收对象会增加构建成本。
 
 ### 1. 基础多边形 + 纹理贴图
 

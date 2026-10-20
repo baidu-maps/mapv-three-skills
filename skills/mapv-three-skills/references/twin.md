@@ -1,6 +1,68 @@
-# Twin 数字孪生车流
+# Twin 车流与实时无人机
 
-Twin 是 mapv-three 提供的车辆数字孪生组件，用于在 3D 地图上实时渲染和管理大量移动车辆模型。通过定时推送位置数据驱动车辆平滑移动，支持多种内置车辆模型（写实风格和极简风格），并提供车辆追踪、颜色设置、可见性控制等交互能力。
+Twin 通过逐帧位置数据驱动模型平滑移动，既用于车流，也可接入实时无人机。车辆模板、追踪和颜色控制保持原用法；无人机通过 modelConfig 配置自己的模型。预设路线模拟和机队托管见 [UAV 与 UAVFleet](./uav.md)。
+
+## 实时无人机接入
+
+真实遥测是某一时刻的目标位置及属性，不是预先写好的 path。以下示例接收同一时刻的一帧目标列表，点位为 WGS84 经纬度、椭球高；引擎需开启 rendering.enableAnimationLoop。
+
+```javascript
+const farLabel = new mapvthree.Label({type: 'text', textSize: 14,
+    textFillStyle: '#40ddcb', textStrokeStyle: '#102b3b', textStrokeWidth: 2});
+const droneTwin = engine.add(new mapvthree.Twin({
+    modelConfig: {1: '/models/uav.glb'},
+    delay: 2000,
+    objectAttributes: {text: 'labelText'},
+    lod: {distance: 2000, maxModels: 100, farObjects: [farLabel]},
+}));
+droneTwin.dataProvider
+    .process('time', item => item.timestamp)
+    .process('point', item => [item.longitude, item.latitude, item.altitude])
+    .process('dir', item => (90 - item.heading) * Math.PI / 180)
+    .process('modelType', () => 1)
+    .process('labelText', item => `${item.id} · 电量 ${item.battery}%`);
+
+function receiveDroneFrame(frame) {
+    // 由 WebSocket／轮询的消息回调调用；复制对象，避免映射改写业务原始消息。
+    droneTwin.push(frame.map(item => ({...item})));
+}
+receiveDroneFrame([{
+    id: '001', timestamp: Date.now(), longitude: 113.3552, latitude: 23.1252,
+    altitude: 100, heading: 90, battery: 80,
+}]);
+```
+
+服务后续持续调用 receiveDroneFrame，至少有相邻帧才有位置插值。这里 heading 约定正北为 0、顺时针为正；Twin dir 是从正东方向计的弧度，模型资源朝向差用 extraDir（度）修正。不要给 dir 直接传度数。
+
+**当前 Twin 消费三维位置和航向，不自动应用遥测 pitch／roll。** 原样携带这些业务字段可以展示信息，但不会驱动模型俯仰／横滚；也不自动绑定 UAV 的机载视域和第一人称封装。
+
+时间用毫秒，显式 process('time', ...) 才保留采集时刻，否则 DataProvider 使用接收时刻。每一帧内时间应一致，帧间递增；秒时间先转换为毫秒，错误时间不能靠增大 delay 修正。示例 delay 为 2 秒缓冲，实际按推送间隔和抖动调整。
+
+`push` 按一帧全量目标列表处理，缺席成员在该帧没有状态，旧队列消费后会清理。服务若只推单机增量，业务先维护当前有效目标集合、统一帧时刻，再推完整快照；目标离线从集合移除。不要逐条把单机增量当作全量帧。空帧也不能替代明确清理，全部清空调用 reset()。不要向 Twin 输入航点数组，或同时用 UAV 改写同一目标模型。
+
+## 远近景展示和模型预算
+
+`lod` 默认 **false**，不改变已有车流的全量模型行为；显式启用才按距离和预算切换。
+
+| lod 字段 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| distance | number | 2000 | 进入近景的距离，米 |
+| maxModels | number | 1000 | 所有模型类型合计预算，非负整数，0 全部远景（此时被追踪目标也没有近景模型，追踪会被自动清除） |
+| hysteresis | number | 0.15 | 退出距离的附加比例，减少临界切换 |
+| updateInterval | number | 200 | 重新选级的检查间隔，毫秒；不是遥测接收间隔 |
+| farObjects | 组件模板数组 | 6 像素 SimplePoint | 支持 SimplePoint、Icon、Label；[] 不画远景替代物 |
+
+远景不只支持点，可以是 ID 标签、图标或组合；Twin 内部创建独立展示组件和数据源，持续同步位置与映射属性。传入模板无需先 engine.add，也无需手动绑定数据源。常驻 objects 与远景替代物是不同用途，不必为远景标签再配置一份 objects。
+
+```javascript
+droneTwin.lod = {...droneTwin.lod, maxModels: 50};
+droneTwin.lod = {...droneTwin.lod, farObjects: []};
+droneTwin.lod = false; // 恢复全量模型模式。
+// 页面卸载时先取消消息订阅，再清理组件。
+droneTwin.dispose();
+```
+
+预算限制近景模型数量，不保证帧率，也不会减少设备消息量。超过预算的近景候选进入远景表示；显隐、点击和既有追踪沿用 Twin 接口。UAVFleet 的 labels、route 管理不会自动套用到 Twin，真实轨迹线和告警面板仍按业务数据组合已有组件。
 
 ---
 
@@ -26,8 +88,8 @@ const twin = engine.add(new mapvthree.Twin({
 // 2. 定时推送车辆数据
 setInterval(() => {
     twin.push([
-        { id: 'car_1', lng: 116.39, lat: 39.9, dir: Math.PI / 2, time: Date.now(), modelType: 3 },
-        { id: 'car_2', lng: 116.40, lat: 39.91, dir: Math.PI, time: Date.now(), modelType: 6 },
+        { id: 'car_1', point: [116.39, 39.9, 0], dir: Math.PI / 2, time: Date.now(), modelType: 3 },
+        { id: 'car_2', point: [116.40, 39.91, 0], dir: Math.PI, time: Date.now(), modelType: 6 },
     ]);
 }, 2000);
 ```
@@ -35,7 +97,8 @@ setInterval(() => {
 **关键步骤说明：**
 1. 引擎必须设置 `enableAnimationLoop: true`，否则车辆不会动画渲染。
 2. 通过 `modelConfig` 配置 modelType 与模型的映射关系。
-3. 定时调用 `push()` 推送数据，Twin 内部会自动计算车辆的插值位移，实现平滑移动。`delay` 应设为推送帧间隔时间的 3-5 倍（如 2 秒推送间隔，delay 设 6000-10000）。
+3. 坐标必须放在 `point: [lng, lat, alt]` 字段。Twin 不会读取 `lng`／`lat`，原始数据是分开的经纬度字段时，用 `dataProvider.process('point', item => [item.lng, item.lat, 0])` 组装。
+4. 定时调用 `push()` 推送数据，Twin 内部会自动计算车辆的插值位移，实现平滑移动。`delay` 应设为推送帧间隔时间的 3-5 倍（如 2 秒推送间隔，delay 设 6000-10000）。
 
 ---
 
@@ -48,14 +111,15 @@ new mapvthree.Twin(options)
 | 参数 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `options.modelConfig` | `{ [modelType: number]: string }` | - | 模型配置，key 为 modelType 编号，value 为模型文件地址（glb/gltf 格式） |
-| `options.delay` | `number` | `2000` | 插值时间窗口（毫秒），推荐设为数据推送帧间隔的 3-5 倍（如 200ms 推送间隔，delay 设 600-1000ms） |
+| `options.delay` | `number` | `2000` | 插值缓冲延迟（毫秒），推荐设为数据推送帧间隔的 3-5 倍（如 200ms 推送间隔，delay 设 600-1000ms） |
 | `options.objects` | `Array<Object3D>` | `[]` | 车辆额外伴随物体（如标签、特效点等），每辆车都会克隆一份 |
 | `options.objectAttributes` | `{ [key: string]: string }` | `{}` | 附加物体所需的数据映射，key 为物体属性名，value 为数据中的字段名 |
 | `options.extraDir` | `number` | `0` | 模型额外旋转角度（度），用于修正模型朝向 |
 | `options.keepSize` | `boolean` | `false` | 模型是否保持像素大小不变（不随缩放变化） |
-| `options.maxScale` | `number` | `20` | keepSize 开启后模型的最大缩放倍数 |
-| `options.enableColorList` | `Array<string>` | `['body']` | 允许修改颜色的模型子网格名称列表 |
+| `options.maxScale` | `number` | `20` | keepSize 开启后模型的最大缩放倍数；当前只对实例化模型生效，带动画的模型不受此值限制 |
+| `options.enableColorList` | `Array<string>` | `['body']` | 允许修改颜色的模型子网格名称列表；带动画的模型固定只给 `body` 着色 |
 | `options.autoClearTrack` | `boolean` | `true` | 追踪目标消失时是否自动清除追踪 |
+| `options.lod` | `false \| Object` | `false` | 远近景切换配置，字段见上方「远近景展示和模型预算」；非法值会抛错 |
 
 ---
 
@@ -66,8 +130,8 @@ DataProvider 负责将原始推送数据映射为 Twin 所需的标准格式。T
 | 标准字段 | 说明 |
 |----------|------|
 | `id` | 车辆唯一标识（必需） |
-| `point` | 坐标数组 `[lng, lat, alt]`，若未配置则使用 `lng`、`lat` 字段 |
-| `time` | 时间戳（毫秒），若未配置 DataProvider 的 time 映射，将自动使用当前时间 |
+| `point` | 坐标数组 `[lng, lat, alt]`（必需）。不会回退读取 `lng`、`lat`，缺少时插值报错 |
+| `time` | 时间戳（毫秒）。未配置 DataProvider 的 time 映射时，一律用接收时刻覆盖，原始数据自带的 time 也会被覆盖 |
 | `dir` | 车辆朝向（弧度），若不传则根据前后两帧位置自动计算 |
 | `modelType` | 模型类型编号，对应 `modelConfig` 中的 key |
 | `color` | 车身颜色（CSS 色值字符串） |
@@ -80,6 +144,8 @@ DataProvider 负责将原始推送数据映射为 Twin 所需的标准格式。T
 **参数说明：**
 - `name` (string) - 目标标准字段名
 - `callback` (string | Function) - 当为字符串时，表示从原始数据中取同名字段；当为函数时，接收原始数据项，返回计算后的值
+
+字符串映射按真值判断：原字段值为 `0`、`''`、`false` 时结果会变成 `undefined`。朝向、高度、速度等可能为 0 的字段要用函数映射，例如 `.process('dir', item => item.dir)`。映射结果直接写回传入的数据对象，不想改动业务原始消息时先复制再 push。
 
 ```javascript
 twin.dataProvider
@@ -102,7 +168,7 @@ twin.dataProvider
     .process('labelVisible', item => true);
 ```
 
-> **注意：** 如果没有通过 `process('time', ...)` 配置 time 映射，DataProvider 会自动为每条数据添加当前时间戳。
+> **注意：** 如果没有通过 `process('time', ...)` 配置 time 映射，DataProvider 会用当前时间覆盖每条数据的 time，即使原始数据已带 time。要使用数据自带的时间，显式写 `.process('time', item => item.time)`。
 
 ---
 
@@ -111,7 +177,7 @@ twin.dataProvider
 ### push 方法
 
 ```javascript
-twin.push(data: Array<Object>)
+twin.push(data);
 ```
 
 向 Twin 推送一帧车辆数据。每帧数据是一个数组，每个元素代表一辆车的当前状态。
@@ -121,13 +187,12 @@ twin.push(data: Array<Object>)
 ```javascript
 twin.push([
     {
-        id: 'car_1',        // 必需，车辆唯一标识
-        lng: 116.39,        // 经度（未配置 point 映射时使用）
-        lat: 39.9,          // 纬度
-        dir: 1.57,          // 朝向，弧度
-        time: 1700000000000,// 时间戳，毫秒
-        modelType: 3,       // 模型类型
-        color: '#ff0000',   // 车身颜色（可选）
+        id: 'car_1',              // 必需，车辆唯一标识
+        point: [116.39, 39.9, 0], // 必需，[经度, 纬度, 高度]
+        dir: 1.57,                // 朝向，弧度
+        time: 1700000000000,      // 时间戳，毫秒；未配置 time 映射时会被接收时刻覆盖
+        modelType: 3,             // 模型类型
+        color: '#ff0000',         // 车身颜色（可选）
     },
 ]);
 ```
@@ -149,6 +214,13 @@ const rawData = [
     },
 ];
 
+// 配置映射（heading 可能为 0，用函数映射）
+twin.dataProvider
+    .process('time', item => item.timestamp)
+    .process('point', item => [item.x, item.y, item.z])
+    .process('dir', item => (90 - item.heading) / 180 * Math.PI)
+    .process('modelType', () => 3);
+
 // 配置映射后直接推送原始数据
 twin.push(rawData);
 ```
@@ -164,15 +236,17 @@ twin.push(rawData);
 | 字段 | 检查方法 | 缺失表现 |
 |------|---------|---------|
 | `id` | 每条数据必须有唯一 ID | 车辆无法创建和追踪 |
-| `point` 或 `lng`+`lat` | 坐标值必须是有效数字，不能为 NaN/undefined | 车辆不显示 |
+| `point` | `[lng, lat, alt]` 数组，值必须是有效数字；只有 `lng`/`lat` 不算 | 插值时报 TypeError，车辆不显示 |
 | `modelType` | 必须与 `modelConfig` 中的 key 对应 | 该车辆不渲染（静默忽略） |
 
 ```javascript
-// 排查代码：在 push 前打印检查
+// 排查代码：放在映射链最后，检查映射后的结果；返回 undefined，不污染数据
 twin.dataProvider.process('__debug', item => {
-    if (!item.id) console.error('缺少 id:', item);
-    if (!item.point && (isNaN(item.lng) || isNaN(item.lat))) console.error('坐标无效:', item);
-    return item;
+    if (item.id === undefined || item.id === null) console.error('缺少 id:', item);
+    if (!Array.isArray(item.point) || item.point.some(v => !Number.isFinite(v))) {
+        console.error('point 无效:', item);
+    }
+    return undefined;
 });
 ```
 
@@ -246,13 +320,13 @@ twin.push = (data) => {
 | 前后帧位移 | 相邻帧同一车辆的坐标变化应合理 | 瞬移说明坐标跳变或 ID 复用 |
 
 ```javascript
-// 排查代码：检查坐标范围
+// 排查代码：检查坐标范围（放在 point 映射之后；返回 undefined，不污染数据）
 twin.dataProvider.process('__coordCheck', item => {
-    const p = item.point || [item.lng, item.lat];
-    if (Math.abs(p[0]) > 180 || Math.abs(p[1]) > 90) {
+    const p = item.point;
+    if (!p || Math.abs(p[0]) > 180 || Math.abs(p[1]) > 90) {
         console.error('坐标超出范围:', item.id, p);
     }
-    return item;
+    return undefined;
 });
 ```
 
@@ -270,9 +344,9 @@ twin.addEventListener('modelLoaded', e => {
     console.log('模型加载完成:', Object.keys(e.modelMap));
 });
 
-// 确认有车辆数据在渲染
+// 确认有车辆数据在渲染；首批数据未过 delay 或 reset 后 buffers 为 undefined
 twin.addEventListener('ticking', e => {
-    console.log('当前渲染车辆数:', e.buffers.id.length);
+    console.log('当前渲染车辆数:', e.buffers?.id?.length ?? 0);
 });
 ```
 
@@ -475,7 +549,7 @@ twin.trackById(id, option)
 |------|------|--------|------|
 | `id` | `string \| number` | - | 车辆 ID |
 | `option.radius` | `number` | `100` | 追踪距离（米） |
-| `option.pitch` | `number` | `1.2` | 俯仰角 |
+| `option.pitch` | `number` | `1.2` | 俯仰角（度） |
 | `option.heading` | `number` | `0` | 方位角 |
 | `option.height` | `number` | - | 高度偏移（仅平面/2.5D 模式） |
 | `option.inside` | `boolean` | `false` | 是否使用车内视角 |
@@ -511,7 +585,7 @@ twin.setColorById('car_1', '#ff0000');
 twin.setColorById('car_1', 0xff0000);
 ```
 
-动态设置指定车辆的颜色。颜色会应用到模型中 `enableColorList` 指定的子网格上。
+动态设置指定车辆的颜色。颜色会应用到模型中 `enableColorList` 指定的子网格上。只对实例化（无动画）模型和远景替代物生效；带动画的模型（如 `MAN_ANIMATE`）颜色只能通过推送数据的 `color` 字段控制。
 
 ### setVisibleByType(modelType, status) - 按模型类型设置可见性
 
@@ -577,7 +651,7 @@ new mapvthree.MockTwin(twinConfig, data, probabilityConfig)
 ### probabilityConfig 格式
 
 ```javascript
-{
+const probabilityConfig = {
     color: {
         'red': 0.3,    // 30% 概率为红色
         'blue': 0.3,   // 30% 概率为蓝色
@@ -589,7 +663,7 @@ new mapvthree.MockTwin(twinConfig, data, probabilityConfig)
         6: 0.3,  // 30% 概率为 modelType 6
         10: 0.2, // 20% 概率为 modelType 10
     },
-}
+};
 ```
 
 > **注意：** `color` 中的 key 如果是 `REALISTIC_TEMPLATE_COLOR` 中定义的颜色名（如 `red`、`blue`），会自动映射为对应色值。也可以直接使用 CSS 色值字符串。
@@ -717,15 +791,15 @@ twin.dataProvider
 
 ### click 事件
 
-Twin 支持点击事件，需要先开启射线检测：
+Twin 直接监听 click 即可，点中的目标数据在 `e.entity`：
 
 ```javascript
-twin.receiveRaycast = true;
-
 twin.addEventListener('click', (e) => {
-    console.log('点击的车辆信息:', e.clickInfo);
+    console.log('点击的车辆信息:', e.entity);
 });
 ```
+
+`e.clickInfo` 只在开启 `lod` 时才会被赋值（等同于 `e.entity`），不开 lod 时为 undefined，统一读 `e.entity` 即可。
 
 ### modelLoaded 事件
 
@@ -739,7 +813,8 @@ twin.addEventListener('modelLoaded', (e) => {
 
 ```javascript
 twin.addEventListener('ticking', (e) => {
-    console.log('当前车辆数:', e.buffers.id.length);
+    // 首批数据未过 delay 或 reset 后 buffers 为 undefined
+    console.log('当前车辆数:', e.buffers?.id?.length ?? 0);
 });
 ```
 
@@ -897,9 +972,9 @@ twin.dataProvider
 
 1. **引擎配置**：必须设置 `rendering.enableAnimationLoop: true`，否则 Twin 车辆不会进行动画渲染。
 
-2. **delay 与推送频率**：`delay` 应设为数据推送帧间隔的 3-5 倍，以提供足够的插值缓冲。例如 200ms 推送间隔，`delay` 推荐设为 600-1000ms；1 秒推送间隔，`delay` 推荐设为 3000-5000ms。Twin 内部使用 delay 作为两帧数据之间的插值时间窗口。
+2. **delay 与推送频率**：`delay` 应设为数据推送帧间隔的 3-5 倍，以提供足够的插值缓冲。例如 200ms 推送间隔，`delay` 推荐设为 600-1000ms；1 秒推送间隔，`delay` 推荐设为 3000-5000ms。
 
-3. **时间同步**：Twin 内部会自动计算数据时间与客户端时间的偏移量，并做抖动校正。如果数据的时间戳与当前时间差异过大，Twin 会自动调整。如果数据不包含 time 字段且未配置 DataProvider 的 time 映射，会自动使用当前时间。
+3. **时间同步**：Twin 内部会自动计算数据时间与客户端时间的偏移量，并做抖动校正。如果数据的时间戳与当前时间差异过大，Twin 会自动调整。未配置 DataProvider 的 time 映射时，即使数据自带 time 也会被接收时刻覆盖。
 
 4. **modelType 匹配**：推送数据中的 `modelType` 值必须与 `modelConfig` 中的 key 对应，否则该车辆不会被渲染。
 

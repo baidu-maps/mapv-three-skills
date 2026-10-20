@@ -6,7 +6,7 @@ MapV-Three 3D 地图开发 AI 助手 Skills，供 Claude、Cursor 等在使用 M
 
 | Skill | 说明 |
 |-------|------|
-| mapv-three-skills | 百度地图 JSAPI Three 版 (MapV-Three)：基于 Three.js 的专业 3D 地图渲染引擎，支持多源底图加载、天空与天气系统、3DTiles、可视化组件、3D 模型加载、LBS 服务、GIS 空间分析、编辑测量等完整 3D 地图开发能力。适用于构建数字孪生、城市可视化、WebGIS 等应用。 |
+| mapv-three-skills | 百度地图 JSAPI Three 版（MapV-Three）：支持多源底图、天空天气、火灾粒子、3DTiles 构件管理与裁剪压平、3DGS、三维表面贴合、可视化组件、模型、LBS、GIS 分析和编辑测量，也覆盖无人机航线模拟、实时无人机、空域网格、风场、视频融合与定标等低空数字孪生能力。 |
 
 ## 安装方式
 

@@ -607,3 +607,8 @@ engine.remove(tileMask);
 2. 使用完毕后，务必调用 `close()` 或 `engine.remove()` 释放资源。
 3. VolumeLandAnalysis 构造时需传入 `engine` 实例。
 4. TileMask 的目标 TileProvider 需要支持 `supportsMask = true`。
+## 无人机随动视域
+
+机载实时视域使用 [UAV.enableViewShed](./uav.md#第一第三人称和机载视域)，内部复用 ViewShedAnalysis 并跟随机身位置、姿态和相对云台角。不要重复创建每帧更新的独立分析器。独立观测点继续使用本文通用分析 API。
+
+机载封装的 pitch 为 0° 朝下、90° 平视、180° 朝上，heading 为相对机头向右的角度；参数详见无人机文档。当前提供遮挡可视化，不提供任务区盲区面积、覆盖率或多机重叠统计。

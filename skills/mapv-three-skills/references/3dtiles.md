@@ -10,9 +10,9 @@ MapV-Three 提供了完整的 3DTiles 加载和管理体系，支持从 URL 或 
 
 ## 交互判断
 
-**关键规则**：当用户提到"树"、"路灯"、"信号灯"、"POI"等元素时，这些是 HDMap3DTiles 的实例化元素图层，必须使用 `HDMap3DTiles` 加载，然后通过 `instancedElementManager` 开启对应图层。即使用户给了一个 tileset.json 的 URL，也应该用 `HDMap3DTiles` 而非 `Default3DTiles` 来加载���
+**关键规则**：当用户提到“树”“路灯”“信号灯”“POI”等元素时，这些是 `HDMap3DTiles` 的实例化元素图层，必须使用 `HDMap3DTiles` 加载，然后通过 `instancedElementManager` 开启对应图层。即使用户给了一个 `tileset.json` URL，也应该用 `HDMap3DTiles` 而非 `Default3DTiles` 加载。
 
-用户要求加载 3DTiles 时，如果用户已明确指定了类或提到了树木/路灯等元素���键词，直接使用对应类，不再询问。否则通过交互确认让用户选择以下方案（推荐选项排在前面并标注「推荐」）：
+用户要求加载 3DTiles 时，如果已明确指定类或提到了树木、路灯等元素关键词，直接使用对应类。否则再让用户选择以下方案：
 - `普通 3DTiles（建筑/地形等） — 使用 Default3DTiles（推荐）`
 - `高精地图场景（含树木/路灯/信号灯/POI） — 使用 HDMap3DTiles`
 
@@ -579,12 +579,12 @@ mm.type = 1;
 配时表格式：
 
 ```javascript
-{
+const trafficState = {
     startTime: 1654863684,   // 起始时间（秒级时间戳）
     period: 60,              // 周期（秒）
     states: [[0, 3], [25, 2], [30, 1]],  // [时间偏移, 灯态]
     // 灯态：1=红灯, 2=黄灯, 3=绿灯
-}
+};
 ```
 
 **RoadLightElement（路灯元素）**
@@ -896,6 +896,163 @@ tile.setGroupMaterial('tunnel', {
 // 重置隧道
 tile.resetGroupMaterial('tunnel');
 ```
+
+---
+
+## 构件查询、过滤与独立样式
+
+`Default3DTiles` 和 `Default3DTilesGroup` 都通过只读属性 `featureManager` 提供构件级操作。这里的构件是 3D Tiles Batch Table 或结构化元数据中有独立 Feature ID 的对象，不等同于 `elementsManager` 管理的路灯、树木等附加元素。
+
+```javascript
+const features = tiles.featureManager;
+
+// 只查询当前已经加载到内存的构件，不触发新瓦片请求。
+const bridges = features.query(feature =>
+    feature.properties.category === 'bridge'
+);
+
+// 规则会持续应用到之后加载的构件。
+features.setFilter(feature => feature.properties.enabled !== false);
+features.setStyle(feature => feature.properties.warning
+    ? {
+        color: '#ff664f',
+        opacity: 0.75,
+        highlight: {color: '#ffd24a', intensity: 0.8},
+    }
+    : null
+);
+```
+
+### 构件记录
+
+`query()` 返回只读快照，每项包含：
+
+| 字段 | 说明 |
+| --- | --- |
+| `key` | 运行时唯一构件键，可用于精确匹配 |
+| `contentKey` | 所属瓦片内容键 |
+| `batchId` | 构件在当前属性表中的索引 |
+| `properties` | Batch Table 或结构化元数据的只读属性快照 |
+
+只有当前已加载且具有受支持 Feature ID 到几何映射的内容才会进入结果。相机移动导致瓦片卸载后，旧查询数组只是历史快照，不应用来代表当前加载集合。
+
+### 方法与约束
+
+| API | 说明 |
+| --- | --- |
+| `query(predicate?)` | 查询当前已加载构件；省略条件返回全部快照 |
+| `setFilter(predicate)` | 设置持续显示条件；传 `null` 清除过滤 |
+| `setStyle(styleOrCallback)` | 设置统一样式或逐构件样式；回调返回 `null` 表示使用源材质 |
+| `reset()` | 同时清除当前管理器的过滤和样式 |
+
+样式只支持 `color`、`opacity`、`roughness`、`metalness`、`highlight`。透明度、粗糙度和金属度范围为 `0～1`；`highlight` 格式为 `{color, intensity}`，强度必须是非负有限数值。PBR 参数只有在源构件材质支持时才有相应效果。
+
+过滤和样式回调必须同步返回，不能返回 Promise，也不能在回调内部再次调用同一管理器。`Default3DTilesGroup.featureManager` 会汇总所有子数据集，并在设置规则失败时回滚已经提交的子项。
+
+```javascript
+tiles.addEventListener('featureerror', event => {
+    console.error(event.phase, event.contentKey, event.error);
+});
+
+// 清除样式但保留过滤。
+features.setStyle(null);
+
+// 清除过滤和样式。
+features.reset();
+```
+
+点击 3DTiles 时，如果命中位置能关联构件，事件实体会合并该构件的业务属性。业务若需要完整只读记录，可根据点击结果再调用 `featureManager.query()`。
+
+## 多区域裁剪 Tiles3DClip
+
+`Tiles3DClip` 直接控制一个 3DTiles 数据集的可见区域。它与需要生成开挖底面和侧壁的 `Tiles3DClipPlan` 用途不同。
+
+```javascript
+const project = coordinate => engine.map.projectArrayCoordinate(coordinate).slice(0, 2);
+const clip = new mapvthree.Tiles3DClip({
+    type: 'polygon',
+    areas: [
+        [
+            project([113.350, 23.120]),
+            project([113.354, 23.120]),
+            project([113.354, 23.124]),
+            project([113.350, 23.124]),
+        ],
+        [
+            project([113.358, 23.126]),
+            project([113.360, 23.126]),
+            project([113.360, 23.128]),
+            project([113.358, 23.128]),
+        ],
+    ],
+    inside: true,
+});
+
+tiles.tiles3DClip = clip;
+tiles.enableClip = true;
+```
+
+| 参数／属性 | 说明 |
+| --- | --- |
+| `type` | `polygon`、`circle` 或 `rect` |
+| `area` | 单个平面投影多边形，等价于只含一项的 `areas` |
+| `areas` | 多个平面投影多边形，按并集参与裁剪；每个环需要 `3～20` 个有效顶点 |
+| `lnglatArea` | 地球 ECEF 模式的单个经纬度多边形，在局部 ENU 平面计算 |
+| `point`、`radius` | 平面圆形的圆心和半径，使用当前地图投影坐标 |
+| `point`、`width`、`height` | 平面矩形左下角、宽度和高度 |
+| `inside` | `true` 裁掉区域内部，`false` 保留区域内部 |
+| `enabled` | 当前控制器的快速开关；瓦片集的 `enableClip` 也必须为 `true` |
+
+一个 `Tiles3DClip` 实例只能绑定一个 tileset。平面地图传入 `area`／`areas` 前要使用当前 `map.projectArrayCoordinate()` 投影，不能直接放入经纬度。地球模式需要经纬度语义时使用 `lnglatArea`；当前该入口只支持单个多边形。
+
+完整包导出 `Tiles3DClip`，开放版入口当前没有导出它。
+
+## 多区域压平 Tiles3DFlatten
+
+`Tiles3DFlatten` 把 3DTiles 中指定经纬度区域压到目标高度。多个区域重叠时，数组中靠后的区域生效。
+
+```javascript
+const flatten = new mapvthree.Tiles3DFlatten({
+    height: 20,
+    regions: [
+        {
+            type: 'polygon',
+            area: [
+                [113.350, 23.120],
+                [113.354, 23.120],
+                [113.354, 23.124],
+                [113.350, 23.124],
+            ],
+        },
+        {
+            type: 'circle',
+            center: [113.356, 23.125],
+            radius: 80,
+            height: 35,
+        },
+        {
+            type: 'rect',
+            bounds: [[113.358, 23.126], [113.360, 23.128]],
+            height: 50,
+        },
+    ],
+});
+
+tiles.tiles3DFlatten = flatten;
+tiles.enableFlatten = true;
+```
+
+| 参数／属性 | 说明 |
+| --- | --- |
+| `enabled` | 控制器开关，默认 `true`；瓦片集的 `enableFlatten` 也要开启 |
+| `height` | 未单独指定高度的区域所继承的默认高度，单位为米 |
+| `regions` | 经纬度区域数组，支持 `polygon`、`circle`、`rect` |
+
+`polygon.area` 为单环经纬度坐标，允许首尾闭合，不支持孔洞、自交或零面积；顶点数量为 `3～20`。`circle.radius` 单位为米且必须大于 `0`。`rect.bounds` 是两个经纬度对角点。
+
+修改 `height`、`regions` 或 `enabled` 会自动更新，无需调用 `build()`。读取 `regions` 返回副本，修改副本后必须重新赋值。一个压平实例只能绑定一个 tileset。
+
+平面地图中的高度是投影空间 Z 值；地球模式使用所有区域控制点中心处的局部 ENU 高度，形成局部平面，并非覆盖范围内处处等海拔的椭球曲面。`Tiles3DFlatten` 在完整包和开放版入口均有导出。
 
 ---
 

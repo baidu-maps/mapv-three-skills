@@ -1,8 +1,8 @@
 ---
 name: mapv-three-skills
-description: 使用 MapV-Three 构建专业的 3D 地图和 GIS 应用 - 基于 Three.js 的 3D 地图渲染引擎，支持天空环境、底图加载、3DTiles、可视化组件、LBS服务、模型资产、GIS分析、编辑测量等完整地图开发能力。适用于创建 3D 数字孪生、城市可视化、GIS 分析等 Web 应用。
+description: 使用 MapV-Three 构建 3D 地图、GIS 与低空数字孪生应用。覆盖天空天气、粒子火灾、底图地形、3DTiles 构件管理与裁剪压平、3DGS、可视化组件、GIS 分析、编辑测量及无人机、空域网格、风场和视频融合。
 license: MIT
-version: 1.0.0
+version: 1.1.0
 ---
 
 # MapV-Three 3D 地图开发指南
@@ -14,13 +14,19 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 - 使用 MapV-Three 创建 3D 地图应用、数字孪生、城市可视化
 - 加载和配置底图（百度、Bing、OSM、天地图、WMS/WMTS 等）
 - 使用天空环境和天气系统（物理天空、动态天空、雨雪雷暴等）
+- 展示火灾粒子效果或扩展通用粒子预设
 - 加载 3DTiles 数据（建筑、高精地图、交通地图）
+- 查询、过滤和设置 3DTiles 构件样式，或执行多区域裁剪与压平
 - 使用可视化组件（点、线、面、热力图、飞线等）
 - 加载 3D 模型和设备资产（GLTF、实例化渲染、LOD）
+- 加载和定位 3D Gaussian Splatting 数据
 - 使用 LBS 服务（地理编码、路线规划、POI 搜索）
 - 进行 GIS 空间分析（通视、视域、淹没、坡度、体积等）
 - 使用编辑和测量工具（绘制、编辑、长度/面积测量）
 - 管理数据源和动画追踪系统
+- 实现无人机沿线飞行、机队管理、实时遥测、第一／第三人称跟随及机载视域
+- 展示空域网格、风险着色、相机自动选级、风场和 CFD 流线
+- 接入实时视频、点对定标、关键帧视频融合及定标工作台
 
 ## 代码生成原则（必须在查阅参考文档前先读完本节）
 
@@ -38,6 +44,19 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 
 ## 快速参考
 
+### 低空任务选型
+
+| 用户需求 | 查阅入口 | 选型规则 |
+| --- | --- | --- |
+| 沿路线模拟飞行、多机管理、改线、跟随、限时标签 | [无人机与机队](./references/uav.md) | 单机用 UAV，多机用 UAVFleet；随飞机变化的航线优先交给 route 托管 |
+| 实时推送无人机位置、远处标记与近处模型切换 | [Twin](./references/twin.md) | 将遥测映射到 Twin.push；不要用替换 path 冒充实时遥测 |
+| 民航／北斗编码、空域分层、跟随相机网格 | [空域网格](./references/airspace-grid.md) | 先确认编码体系，两种编码不可混用 |
+| 风速风向、拖尾箭头、流线、OpenFOAM | [风场与 CFD](./references/wind-field.md) | 浏览器使用 WindField；原始 CFD 用配套工具预处理 |
+| 视频融合、WebRTC／RTSP、定标与工作台 | [视频融合与定标](./references/video-fusion.md) | 点对定标无需额外 receiver；RTSP 先在服务端转换为 WHEP/WebRTC |
+| 独立相机巡航／独立航路管道 | [Tracker](./references/tracker.md)／[Polyline 与 TubeLine](./references/polyline-wall.md) | 复用通用组件，不另建重复控制器 |
+
+按任务只加载相关文档。先确认用户所用引擎版本包含相应导出；内部实现类和 website 示例面板不是公开 API。当前 Twin 不自动应用遥测 pitch／roll，机载视域不输出盲区面积，网格着色不自动计算风险，不要把这些业务能力写成已内置。低空组件要求运行地图使用 WGS84；空域网格的编码输入基准另见网格文档。多数数据设置和 ready 流程要求先 `engine.add`。
+
 ### 0. 项目搭建
 - [项目搭建指南](./references/project-setup.md) — npm安装、离线部署、环境配置、项目结构
 
@@ -47,25 +66,27 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 ### 2. 天空与天气
 - [天空环境系统](./references/sky-environment.md) — EmptySky、DefaultSky、HazeSky、StaticSky、CustomStaticSky、VerticalGradientSky、DynamicSky、PhysicalSky
 - [天气系统](./references/weather-system.md) — DynamicWeather 雨雪雾雷暴等9种天气效果
+- [火灾效果与粒子系统](./references/particles-fire.md) — FireEffect 多火点管理、严重程度、风场影响、ParticleSystem 与自定义预设
 
 ### 3. 底图加载
 - [MapView底图系统](./references/mapview-bindmap.md) — MapView、QuadMap、影像瓦片提供者（Bing/OSM/XYZ/百度/天地图/WMS/WMTS）
 - [矢量瓦片、路况与地形](./references/vector-tile.md) — Mapbox矢量、百度矢量、GeoJSON矢量、**百度路况（BaiduTrafficTileProvider）、高精路况（HDTrafficTileProvider）**、Cesium地形、材质管理器。用户要求加载路况时查阅此文档
 
 ### 4. 3DTiles
-- [3DTiles加载与管理](./references/3dtiles.md) — Default3DTiles、3DTilesGroup、材质管理器、HDMap、TrafficMap、元素管理器
+- [3DTiles加载与管理](./references/3dtiles.md) — 数据集与分组、构件查询／过滤／样式、多区域裁剪／压平、材质与元素管理器
 
 ### 5. 可视化组件
 - [SimplePoint 简单点](./references/simple-point.md) — 基础散点、数据驱动颜色/大小、自定义形状
-- [Label 标签、IconPoint 图标点、Icon 图标与 Text 文字](./references/label-icon.md) — 文本标签、图标点、图文组合、Icon 贴地/跳动/旋转图标、Text 纯文字标注
+- [Label 标签、IconPoint 图标点、Icon 图标与 Text 文字](./references/label-icon.md) — 文本标签、图标点、图文组合、三维表面贴合、跳动／旋转图标
 - [EffectPoint 特效、Circle 圆形、Pillar 柱体](./references/effect-circle-pillar.md) — 波纹/雷达/气泡特效、圆形、柱状图
-- [Polyline 折线与 Wall 墙体](./references/polyline-wall.md) — SimpleLine、Polyline（屏幕/贴地）、飞线效果、Wall 墙体动画
-- [Polygon 多边形](./references/polygon.md) — 填充/拉伸/边框/贴地/纹理/动画多边形
+- [Polyline、TubeLine 与 Wall](./references/polyline-wall.md) — 折线、虚线、流动箭头、渐变、三维航路管道、墙体
+- [Polygon 多边形](./references/polygon.md) — 填充、拉伸、边框、三维表面贴合、纹理和动画多边形
 - [Heatmap 热力图与 ClusterPoint 聚合点](./references/heatmap-cluster.md) — 2D/3D 热力图、点聚合
 - [EffectModelPoint 效果模型点](./references/effect-model-point.md) — 自定义3D模型点、旋转/跳跃动画、PointGroup组合
 
 ### 6. 模型与资产
 - [模型加载](./references/model-loading.md) — SimpleModel、AnimationModel、LODModel、GLTFScene、GeoInstancedMesh、InstancedModel、DynamicInstancedMesh
+- [3D Gaussian Splatting](./references/3dgs.md) — GaussianSplat、PLY／SPLAT／glTF／GLB、地理定位、变换和加载事件
 - [AssetsScene 资产场景](./references/assets-scene.md) — 资产平台对接、设备加载/添加/编辑/删除、巡游、设备查询与显隐控制
 - [设备状态控制](./references/device-control.md) — 情报板文字、信号灯、路灯、风机、卷帘门、升降杆、防火门等 8 种设备操作
 
@@ -82,7 +103,7 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 - [编辑与测量工具](./references/editor-measure.md) — Editor（DrawerType: Spline/Point/Circle/Rect/Polygon）、Measure（MeasureType: Length/Area/Point）
 
 ### 10. 数字孪生与实时数据
-- [Twin 数字孪生车流](./references/twin.md) — Twin车辆管理、MockTwin模拟车流、DataProvider数据映射、模型配置、车辆追踪
+- [Twin 车流与实时无人机](./references/twin.md) — DataProvider 遥测映射、全量位置帧、模型预算、远景点／图标／标签、目标追踪
 - [TileLightManager 实时信号灯](./references/tile-light-manager.md) — 实时信号灯加载、DefaultLampRequest/RegionLampRequest数据源、灯态编码、自定义数据源
 
 ### 11. 数据源
@@ -93,6 +114,12 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 
 ### 13. 覆盖物
 - [覆盖物与弹窗](./references/overlay-popup.md) — DOMOverlay、Popup、Marker、GroundOverlay、事件系统
+
+### 14. 低空数字孪生
+- [无人机与机队](./references/uav.md) — UAV、UAVFleet、航线托管、第一／第三人称、机载视域、共享数据和限时标签
+- [空域网格](./references/airspace-grid.md) — UAVGrid、BeiDouGrid、编码、分层、风险着色、相机及目标跟随
+- [风场、流线与 CFD](./references/wind-field.md) — WindField 数据、时间轴、粒子拖尾、流线与 OpenFOAM 后处理
+- [视频融合、接流与定标](./references/video-fusion.md) — VideoFusion、VideoStream、WHEP/WebRTC、关键帧定标与 VideoCalibrationEditor
 
 ## 如何使用
 
