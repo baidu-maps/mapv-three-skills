@@ -420,6 +420,8 @@ measure.measurementMode = 'space';
 
 贴合控制“画在哪里”，`measurementMode` 控制“数值怎么算”，两者相互独立。
 
+Editor 和 Measure 只在 `groundTargets` 上拾取落点，点到其他表面不落点。规则见 [polygon.md](./polygon.md) 的「贴到地形和 3DTiles 表面」。
+
 ### 2.3 MeasureType 测量类型常量
 
 通过 `mapvthree.MeasureType` 或 `mapvthree.Measure.MeasureType` 访问。

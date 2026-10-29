@@ -219,7 +219,7 @@ const surfaceLine = engine.add(new mapvthree.Polyline({
 surfaceLine.dataSource = dataSource;
 ```
 
-省略 `groundTargets` 时，引擎自动发现可接收表面；传入空数组表示不接收任何表面。未命中接收表面时保留数据源原始位置。贴合需要采样和细分线段，大量长线应控制数据规模。
+`groundTargets` 规则见 [polygon.md](./polygon.md) 的「贴到地形和 3DTiles 表面」。
 
 ### 示例：平面拉伸粗线 + 顶点颜色
 

@@ -128,7 +128,15 @@ const area = engine.add(new mapvthree.Polygon({
 area.dataSource = polygonSource;
 ```
 
-`clampToGround` 控制三维表面贴合。省略 `groundTargets` 时自动发现接收对象；传空数组表示不接收任何表面。贴合会根据目标表面细分几何，复杂面和大量接收对象会增加构建成本。
+`groundTargets` 规则（点、线、面、Label、Editor、Measure 通用）：
+
+- 省略：自动发现，场景中的 3DTiles、模型和底图都会接收；传 `[]`：不接收任何表面。
+- 只贴底图（影像/地形瓦片）时传 `MapView` 实例，如 `[mapView]`。
+- 数组内对象需已 `engine.add`，否则被忽略；数组按引用比较，修改时赋新数组，原地 `push` 不生效。
+- 线、面只在接收对象上显示，其余区域不绘制；点类未命中时保留原始高程。
+- 旧写法 `isGroundPrimitive: true` 不支持 `groundTargets`，需改用 `clampToGround: true`。
+
+线、面贴合每帧对接收对象额外渲染一次深度，接收对象越少开销越小。
 
 ### 1. 基础多边形 + 纹理贴图
 

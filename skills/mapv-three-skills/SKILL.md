@@ -41,6 +41,7 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 7. **AK 不要猜测**：使用 LBS 服务（地理编码、搜索、路线规划等）需要 `BaiduMapConfig.ak`。如果代码中已有 `BaiduMapConfig.ak` 的设置，可以直接复用；如果没有，必须提示用户提供，**不要**从其他服务（如 AssetsScene、TileLightManager 等）的 ak 中复用，因为不同服务的 ak 权限可能不同。
 8. **自定义瓦片排查**：用户反馈自定义 XYZ 瓦片加载不出来时，**不要直接修改代码**，而是查阅 `mapview-bindmap.md` 中 XYZImageryTileProvider 的「自定义瓦片服务常见问题排查」章节，将排查方案以清单形式列出引导用户确认。对于 startLevel 问题，如果用户不确定最小层级，可让用户提供一个可访问的瓦片地址，AI 通过 WebFetch 逐级访问父瓦片（z-1, x//2, y//2）自动探测出 startLevel。排查清单：(1) 瓦片地址是否可访问 (2) startLevel 是否匹配数据最小层级 (3) Y 坐标方向（{y} vs {reverseY}） (4) CORS 跨域。确认具体原因后再修改代码。
 9. **版本确认**：当用户遇到 API 不存在、参数不生效等问题时，优先让用户确认 `@baidu/mapv-three` 的版本（`npm list @baidu/mapv-three`）。内网 npm 安装时必须加 `@latest`（`npm install -S @baidu/mapv-three@latest`），否则可能因 registry 缓存或 lock 文件安装到旧版本。详见 `project-setup.md` 的版本注意事项。
+10. **贴地指定接收对象**：用户要求点/线/面/编辑/量测"只贴到某个 3DTiles、地形或底图上"时，使用 `clampToGround: true` + `groundTargets`，规则见 `polygon.md` 的「贴到地形和 3DTiles 表面」。
 
 ## 快速参考
 
