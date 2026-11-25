@@ -2,7 +2,8 @@
 name: mapv-three-skills
 description: 使用 MapV-Three 构建 3D 地图、GIS 与低空数字孪生应用。覆盖天空天气、粒子火灾、底图地形、3DTiles 构件管理与裁剪压平、3DGS、可视化组件、GIS 分析、编辑测量及无人机、空域网格、风场和视频融合。
 license: MIT
-version: 1.1.0
+metadata:
+  version: "1.1.0"
 ---
 
 # MapV-Three 3D 地图开发指南
@@ -52,6 +53,7 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 | 沿路线模拟飞行、多机管理、改线、跟随、限时标签 | [无人机与机队](./references/uav.md) | 单机用 UAV，多机用 UAVFleet；随飞机变化的航线优先交给 route 托管 |
 | 实时推送无人机位置、远处标记与近处模型切换 | [Twin](./references/twin.md) | 将遥测映射到 Twin.push；不要用替换 path 冒充实时遥测 |
 | 民航／北斗编码、空域分层、跟随相机网格 | [空域网格](./references/airspace-grid.md) | 先确认编码体系，两种编码不可混用 |
+| 按禁飞区、限飞区的多边形和上下限高度计算占用网格 | [多边形占格](./references/airspace-grid.md#多边形占格) | 按业务所需的编码体系选择网格类，民航分别指定水平和高度层级，北斗使用单一层级 |
 | 风速风向、拖尾箭头、流线、OpenFOAM | [风场与 CFD](./references/wind-field.md) | 浏览器使用 WindField；原始 CFD 用配套工具预处理 |
 | 视频融合、WebRTC／RTSP、定标与工作台 | [视频融合与定标](./references/video-fusion.md) | 点对定标无需额外 receiver；RTSP 先在服务端转换为 WHEP/WebRTC |
 | 独立相机巡航／独立航路管道 | [Tracker](./references/tracker.md)／[Polyline 与 TubeLine](./references/polyline-wall.md) | 复用通用组件，不另建重复控制器 |
@@ -118,7 +120,7 @@ MapV-Three 是基于 Three.js 的专业 3D 地图渲染引擎（@baidu/mapv-thre
 
 ### 14. 低空数字孪生
 - [无人机与机队](./references/uav.md) — UAV、UAVFleet、航线托管、第一／第三人称、机载视域、共享数据和限时标签
-- [空域网格](./references/airspace-grid.md) — UAVGrid、BeiDouGrid、编码、分层、风险着色、相机及目标跟随
+- [空域网格](./references/airspace-grid.md) 支持民航与北斗编码、多边形占格、分层、风险着色、相机及目标跟随。
 - [风场、流线与 CFD](./references/wind-field.md) — WindField 数据、时间轴、粒子拖尾、流线与 OpenFOAM 后处理
 - [视频融合、接流与定标](./references/video-fusion.md) — VideoFusion、VideoStream、WHEP/WebRTC、关键帧定标与 VideoCalibrationEditor
 

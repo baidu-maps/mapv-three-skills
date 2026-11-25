@@ -9,7 +9,8 @@
 | 高度精度 | heightLevel，1～15，默认 10 | 由 level 决定 |
 | 显示维度 | 三维；另有独立二维编码工具 | dimension:2 或 3，默认 3 |
 | 高度域 | [-512,15872) 米，层厚 16384／2^heightLevel 米（h=10 为 16 米） | 固定高度域约 [-6302 km, 528680 km)，与层级无关；层厚随层级变细，近地面 L1 约 457 km、L7 约 7.7 m |
-| 航线／多边形覆盖 | 无专用入口 | setPath／setPolygon |
+| 多边形占格 | `setPolygon()`，需 SDK 提供该实例方法 | `setPolygon()` |
+| 航线穿格 | 暂无专用入口 | `setPath()` |
 
 各级水平格尺寸（经差×纬差，数值来自源码刻度表）：
 
@@ -77,6 +78,7 @@ BeiDouGrid 使用相同区域边界，把 planeLevel／heightLevel 改为 level�
 | API | 用途 |
 | --- | --- |
 | `createGrid(options,{signal}?)` | 异步创建，成功后替换原显示；可用 AbortSignal 取消 |
+| `setPolygon(rings, options)` | 按多边形构建并显示完整格子，返回占用编码 `cellIds`。取消信号传入 `options.signal`。 |
 | `setGlobalStyle(style)` | 修改整体线框、外表面和选择样式 |
 | `setCellStyles(groups,{mode:'merge'}?)` | groups 每项为 ids 数组及单格样式 |
 | `clearCellStyles(ids?)` | 清指定编码样式；省略清全部 |
@@ -85,7 +87,7 @@ BeiDouGrid 使用相同区域边界，把 planeLevel／heightLevel 改为 level�
 | `clearGrid()` | 停止跟随、取消构建并清显示 |
 | `cellCount`、`revision`、`selectedCell`、`isFollowing`、`isGlobal`、`pickHeight` | 当前状态；BeiDouGrid 另有只读 `dimension` |
 
-全局样式：lineColor 默认 '#4199e1'，lineOpacity:1，gridFillColor:'#4199e1'，gridFillOpacity:0，highlightColor:'#ffcf4d'，highlightOpacity:0.25，highlightLineColor:'#ffcf4d'，drawOnTop:false，lineEmissive:0。单格样式支持 fillColor／fillOpacity／lineColor／lineOpacity。
+全局线框与填充默认均为 `#4199e1`，`lineWidth` 为 2 像素，`lineOpacity` 为 1，`gridFillOpacity` 为 0.15。选中格的 `highlightColor` 和 `highlightLineColor` 均为 `#ffcf4d`，`highlightOpacity` 为 0.25。`drawOnTop` 默认为 `false`，`lineEmissive` 默认为 0。单格样式支持 `fillColor`、`fillOpacity`、`lineColor` 和 `lineOpacity`。
 
 `merge` 只更新所列格子／字段，保留其他样式；`replace` 清空原单格样式表后应用本次分组。全局样式不被 replace 删除。风险颜色由业务把等级映射为编码列表，不由引擎自动计算风险。
 
@@ -168,7 +170,7 @@ followTarget 默认 below:60、above:120，单位米；radius 默认值两个类
 
 全球粗网格受投影合法纬度约束：球体北斗至 ±88°、UAV 至 ±90°；平面 1 级完整格至 ±84°。局部跨日界线窗口不自动拆分。当前不是 MapView 瓦片树混合 LOD，也不是逐格精确视锥裁剪。
 
-## 北斗航线及多边形覆盖
+## 北斗航线穿格
 
 ```javascript
 const pathGrid = engine.add(new mapvthree.BeiDouGrid({dimension: 3, level: 6}));
@@ -184,18 +186,73 @@ if (coverage.conflictCellIds.length) {
 
 setPath 同时生成显示和返回穿越编码，不是只查询。默认 continuous 连续穿格；sampled 按 sampleSpacing（默认 10 米）取点，可能漏格，不能与 restrictedCellIds 一起使用。还可传 `curve`（'linear'／'centripetal'）和 `signal`。航点必须是三维 `[经度,纬度,高度]`，纬度不超过 ±85°，最多 2048 个；限制格不超过 10 万个。限制格维度、级别必须一致；结果只检查本次零宽中心线，不是飞机体积碰撞检测或持续侵入告警。返回值包含 cellIds、conflictCellIds、coverage、sampleSpacing 等，其中 layerCount 为 undefined。
 
+## 多边形占格
+
+计算禁飞区或限飞区占用的空域时，先将网格实例添加到 `engine`，再调用 `const result = await grid.setPolygon(rings, options)`。
+
+### 输入参数
+
+| 参数 | JavaScript 类型 | 必填条件 | 含义和取值 |
+| --- | --- | --- | --- |
+| `rings` | `number[][][]` | 必填 | 一个多边形的坐标，取 GeoJSON Polygon Feature 的 `feature.geometry.coordinates`。结构为 `[外环, 洞环1, …]`，无洞时传 `[外环]`。每个环至少 4 个点（含重复的闭合点），首尾坐标相同。每个点恰好有两个有限数值，顺序为 CGCS2000 `[经度, 纬度]`，单位为度。 |
+| `options` | `object` | 三维必填，北斗二维可省略 | 本次占格的高度范围、精度和取消信号。北斗的 `dimension` 在创建实例时设置。 |
+| `options.bottomHeight` | `number` | 三维必填 | 整个区域共用的椭球高下限，单位为米，须为有限数。民航最低为 `-512`，北斗取值见上方高度域表。二维忽略。 |
+| `options.topHeight` | `number` | 三维必填 | 椭球高上限，单位为米，须为有限数且大于下限。民航最高为 `15872`，北斗取值见上方高度域表。二维忽略。 |
+| `options.planeLevel` | `number`（整数） | 民航可选 | 水平层级，范围 1～16，默认 11。 |
+| `options.heightLevel` | `number`（整数） | 民航可选 | 垂直层级，范围 1～15，默认 10。 |
+| `options.level` | `number`（整数） | 北斗可选 | 网格层级，范围 1～10。省略时沿用实例层级，实例默认 7。 |
+| `options.signal` | `AbortSignal` | 两者均可选 | 传入 `controller.signal`，调用对应的 `controller.abort()` 可取消本次构建。 |
+
+### 返回值
+
+方法返回 `Promise`。成功后，`await` 得到本次构建结果。
+
+| 字段 | 类型 | 含义 |
+| --- | --- | --- |
+| `cellIds`、`cellCount` | 分别为 `string[]`、`number` | 占用的完整网格编码列表及格子总数。三维模式下，同一水平位置的不同高度层各有一个编码。 |
+| `bottomHeight`、`topHeight`、`layerCount` | 均为 `number` | 实际覆盖的最低、最高格界（米）和高度层数。北斗二维模式下这三项均为 0。 |
+| `planeLevel`、`heightLevel` | 均为 `number` | 民航结果中的实际水平和垂直层级。 |
+| `level`、`dimension` | 均为 `number` | 北斗结果中的实际层级和维度（2 或 3）。 |
+| `requestId`、`revision` | 均为 `number` | 本次构建请求编号和成功构建后的修订号。 |
+| `datumApproximation`、`isGlobal` | 均为 `boolean` | 是否使用坐标基准近似，以及是否为全球粗网格。多边形占格的 `isGlobal` 为 `false`。 |
+
+### 调用示例
+
+**民航空域网格。** 先用 `typeof mapvthree.UAVGrid?.prototype?.setPolygon === 'function'` 确认当前 SDK 提供该方法。水平和高度精度分别由 `planeLevel` 和 `heightLevel` 决定。下面计算一个 L 形区域在椭球高 50～120 米之间占用的三维民航网格。
+
 ```javascript
-await pathGrid.setPolygon([[
-    [113.354, 23.124], [113.358, 23.124], [113.358, 23.127],
-    [113.354, 23.127], [113.354, 23.124],
-]], {level: 6, bottomHeight: 0, topHeight: 150});
+const rings = [[
+    [113.354, 23.124], [113.356, 23.124], [113.356, 23.125],
+    [113.355, 23.125], [113.355, 23.126], [113.354, 23.126],
+    [113.354, 23.124],
+]];
+const uavGrid = engine.add(new mapvthree.UAVGrid());
+const result = await uavGrid.setPolygon(rings, {
+    planeLevel: 11, heightLevel: 10,
+    bottomHeight: 50, topHeight: 120,
+});
+console.log(result.cellIds, result.cellCount, result.layerCount);
+const cell = mapvthree.UAVGrid.decode3D(result.cellIds[0]);
+console.log(cell.code, cell.bottomHeight, cell.topHeight);
 ```
 
-输入是 Polygon.coordinates：闭合外环及可选洞，不是完整 Feature。保留有正面积交集的完整格子，不裁剪格形。支持凹形和合法洞，拒绝自交、非法洞、MultiPolygon 和跨日界线区域；顶点最多 4096 个，二维网格忽略高度参数。成功后替换显示并停止跟随，返回值含 `cellIds`。
+上例每层厚 16 米。输入 50～120 米时，结果中的 `bottomHeight` 为 48，`topHeight` 为 128，`layerCount` 为 5。
+
+**北斗网格。** 同一片区域可沿用上面的 `rings`，用 `level` 同时确定水平和高度精度。三维编码用 `BeiDouGrid.decode3D(code)` 解码。只需二维覆盖时，创建 `dimension: 2` 的实例即可省略高度范围。
+
+```javascript
+const beidouGrid = engine.add(new mapvthree.BeiDouGrid({dimension: 3}));
+const coverage = await beidouGrid.setPolygon(rings, {
+    level: 6, bottomHeight: 50, topHeight: 120,
+});
+console.log(coverage.cellIds);
+```
+
+两种网格都支持凹多边形和合法孔洞。水平上有正面积重叠才计入，完全位于洞内或仅触边、触角的格子会排除。返回完整格子，边缘格可能伸出区域。单次调用接收一个 Polygon，所有环合计最多 4096 个顶点。自交环、非法孔洞、MultiPolygon 和跨日界线区域会被拒绝。成功后，该实例停止跟随并用本次结果替换显示。
 
 ## 预算、事件和清理
 
-构造 budget 默认 maxVertices:500000、maxChunks:256、maxStyledCells:10000；手动模式 autoDegrade 默认 false。自动模式可尝试更粗级别，结果以实际返回值为准；不要为了密度无限放大预算。
+构造参数 `budget` 中，网格构建的 `maxVertices` 默认是 `Infinity`，`maxChunks` 默认是 256。单格样式使用独立预算，`maxStyleVertices` 默认是 500000，`maxStyledCells` 默认是 10000。手动模式的 `autoDegrade` 默认为 `false`，相机自动选级时可尝试更粗的级别。
 
 ```javascript
 cameraGrid.addEventListener('buildcomplete', event => {
